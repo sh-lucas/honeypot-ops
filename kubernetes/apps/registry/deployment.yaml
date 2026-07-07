@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: registry
+  labels:
+    app: registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry
+  template:
+    metadata:
+      labels:
+        app: registry
+    spec:
+      containers:
+      - name: zot
+        image: ghcr.io/project-zot/zot-minimal:v2.1.18
+        ports:
+        - containerPort: 5000
+          name: http
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          tcpSocket:
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        volumeMounts:
+        - name: config-vol
+          mountPath: /etc/zot
+          readOnly: true
+        - name: auth-vol
+          mountPath: /auth
+          readOnly: true
+        - name: storage-vol
+          mountPath: /var/lib/registry
+      volumes:
+      - name: config-vol
+        configMap:
+          name: zot-config
+      - name: auth-vol
+        secret:
+          secretName: registry-auth
+      - name: storage-vol
+        persistentVolumeClaim:
+          claimName: registry-storage

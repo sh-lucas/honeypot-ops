@@ -1,0 +1,6 @@
+*.key
+*.key.pub
+about.txt
+kubeconfig.yaml
+.source.sh
+**/secret.yaml

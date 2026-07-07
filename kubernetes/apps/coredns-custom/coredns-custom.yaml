@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+data:
+  registry.server: |
+    registry.sh-lucas.dev:53 {
+        hosts {
+            100.72.43.20 registry.sh-lucas.dev
+            fallthrough
+        }
+        forward . /etc/resolv.conf
+        errors
+        cache 30
+    }

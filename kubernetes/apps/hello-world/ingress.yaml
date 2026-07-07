@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hello-world
+  namespace: default
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: hello-world.sh-lucas.dev
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: hello-world
+            port:
+              number: 80
