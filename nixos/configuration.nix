@@ -147,13 +147,8 @@
     dockerCompat = true;
     dockerSocket.enable = true; # Emula o socket do Docker em /run/docker.sock
   };
-  # K3s registry mirror configuration (pull from our TLS-enabled registry)
-  environment.etc."rancher/k3s/registries.yaml".text = ''
-    mirrors:
-      "registry.sh-lucas.dev":
-        endpoint:
-          - "https://registry.sh-lucas.dev"
-  '';
+  # K3s registry auth: managed manually on the server at /etc/rancher/k3s/registries.yaml
+  # Local backup copy: ./registries.yaml (gitignored)
 
   # Programs / Shell integrations
   programs.bash.interactiveShellInit = ''

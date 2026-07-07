@@ -4,3 +4,4 @@ about.txt
 kubeconfig.yaml
 .source.sh
 **/secret.yaml
+registries.yaml
