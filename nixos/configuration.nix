@@ -50,13 +50,15 @@
     allowedTCPPorts = [ ]; # Closed to the public internet
     allowedUDPPorts = [ 41641 ]; # Tailscale direct connections
     trustedInterfaces = [ "tailscale0" ]; # Trust all traffic over Tailscale
-    interfaces.tailscale0.allowedUDPPorts = [ 53 ];
-    interfaces.tailscale0.allowedTCPPorts = [ 53 ];
 
     # Bloqueia absolutamente tudo vindo da internet pública (enp0s6) no mangle PREROUTING,
     # antes do K3s interceptar tráfego via NAT, permitindo apenas conexões de saída (respostas),
     # tráfego direto do Tailscale (UDP 41641) e DHCP (UDP 68).
+    #
+    # Também filtra o tráfego da Tailscale no mangle PREROUTING para permitir apenas SSH, DNS,
+    # HTTPS e a API do Kubernetes, dropando o resto antes que o K3s faça DNAT.
     extraCommands = ''
+      # --- Bloco da Internet Pública (enp0s6) ---
       iptables -t mangle -N public-block 2>/dev/null || true
       iptables -t mangle -F public-block
       
@@ -68,6 +70,20 @@
       iptables -t mangle -D PREROUTING -i enp0s6 -j public-block 2>/dev/null || true
       iptables -t mangle -A PREROUTING -i enp0s6 -j public-block
 
+      # --- Bloco do Tailscale (tailscale0) ---
+      iptables -t mangle -N tailscale-block 2>/dev/null || true
+      iptables -t mangle -F tailscale-block
+      
+      iptables -t mangle -A tailscale-block -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+      iptables -t mangle -A tailscale-block -p tcp --dport 22 -j ACCEPT
+      iptables -t mangle -A tailscale-block -p tcp --dport 53 -j ACCEPT
+      iptables -t mangle -A tailscale-block -p udp --dport 53 -j ACCEPT
+      iptables -t mangle -A tailscale-block -p tcp --dport 443 -j ACCEPT
+      iptables -t mangle -A tailscale-block -p tcp --dport 6443 -j ACCEPT
+      iptables -t mangle -A tailscale-block -j DROP
+      
+      iptables -t mangle -D PREROUTING -i tailscale0 -j tailscale-block 2>/dev/null || true
+      iptables -t mangle -A PREROUTING -i tailscale0 -j tailscale-block
     '';
   };
 
