@@ -1,0 +1,26 @@
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: checkup
+  namespace: flux-system
+spec:
+  image: registry.sh-lucas.dev/checkup
+  interval: 5m
+  secretRef:
+    name: registry-credentials
+---
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: checkup
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: checkup
+  policy:
+    numerical:
+      order: asc
+    filterTags:
+      # Filtra tags no formato "1234567890-abcdef" (timestamp-sha)
+      pattern: '^(?P<val>[0-9]+)-[a-f0-9]+$'
+      extract: '$val'
