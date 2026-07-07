@@ -3,6 +3,4 @@ kind: Kustomization
 resources:
   - app.yaml
   - storage.yaml
-  - network.yaml
-  - secret.yaml
-  
+  - network.yaml  
