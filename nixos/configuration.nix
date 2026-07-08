@@ -97,6 +97,7 @@
       "--write-kubeconfig-mode 640"
       "--write-kubeconfig-group k3sconfig"
       "--tls-san ${config.networking.hostName}"
+      "--disable metrics-server"
     ];
   };
   # Grupo de acesso ao kubeconfig
