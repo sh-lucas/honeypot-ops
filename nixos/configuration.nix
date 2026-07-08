@@ -89,6 +89,10 @@
 
   # Services
   services.tailscale.enable = true;
+  systemd.services.tailscaled.serviceConfig = {
+    OOMScoreAdjust = -1000;
+    Nice = -10;
+  };
 
   services.k3s = {
     enable = true;
