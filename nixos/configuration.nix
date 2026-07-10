@@ -49,7 +49,7 @@
     enable = true;
     allowedTCPPorts = [ ]; # Closed to the public internet
     allowedUDPPorts = [ 41641 ]; # Tailscale direct connections
-    trustedInterfaces = [ "tailscale0" ]; # Trust all traffic over Tailscale
+    trustedInterfaces = [ "tailscale0" "cni0" "flannel.1" ]; # Trust Tailscale and K3s interfaces
 
     # Bloqueia absolutamente tudo vindo da internet pública (enp0s6) no mangle PREROUTING,
     # antes do K3s interceptar tráfego via NAT, permitindo apenas conexões de saída (respostas),
