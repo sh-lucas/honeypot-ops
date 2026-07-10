@@ -39,3 +39,8 @@ Para rodar esta mesma configuração em qualquer outro provedor ou máquina virt
 - IPs commitados atualmente e anteriormente são da rede privada (tailscale), não IPs públicos.
 - Chaves SSH privadas não foram commitadas nesse repositório. Apenas chaves públicas.
 - O makefile e a estrutura do projeto foi feita para mim especificamente, mas pode ser adaptado para ser agnostico de provedor ou usuário.
+
+
+## Chaves e Secrets
+
+Como você pode perceber, as chaves e secrets estão fora do git, e precisam ser deployados manualmente toda vez que a VPS reiniciar. O ideal é migrar futuramente para sops e criptografar tudo antes de fazer upload para um repositório git privado.
