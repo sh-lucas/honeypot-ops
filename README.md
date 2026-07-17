@@ -14,6 +14,27 @@ Este repositório contém a configuração declarativa de infraestrutura para um
 
 ---
 
+## Arquitetura de Acesso
+
+Existem dois grupos de serviços, e eles não devem compartilhar o mesmo caminho de entrada:
+
+- **Cloudflare somente**: aplicações públicas autenticadas pelo Cloudflare, como `checkup` e `hello-world`. Seus Ingresses usam exclusivamente o entrypoint Traefik `web` (porta 80 interna), que é o destino do `cloudflared`.
+- **Tailscale somente**: SSH, API do K3s e registry. SSH (`22`) e K3s (`6443`) são liberados somente em `tailscale0`; o Ingress do registry usa exclusivamente o entrypoint `websecure` (`443`).
+
+O túnel Cloudflare aponta apenas para `traefik.kube-system.svc.cluster.local:80`. Portanto, ele não consegue alcançar o registry em `websecure`. A porta 80 não é permitida pela interface Tailscale, enquanto a porta 443 é. O firewall da Oracle bloqueia IPv4 e IPv6 externamente, e o firewall do host fornece uma segunda camada.
+
+Não substituir essa separação por allowlists de IP em Middlewares do Traefik. O ServiceLB do K3s pode mascarar o IP de origem antes do Traefik, quebrando acessos legítimos. A fronteira deve continuar sendo os entrypoints `web` e `websecure`.
+
+Comportamento esperado:
+
+- `checkup` e `hello-world` via Cloudflare: sucesso;
+- acesso direto às aplicações pela porta 80 da Tailscale: bloqueado;
+- registry pela Tailscale: `401 Unauthorized` sem credenciais;
+- registry pela Cloudflare: `404 Not Found`;
+- SSH e K3s: acessíveis somente pela Tailscale.
+
+---
+
 ## 📂 Estrutura do Projeto
 
 - `nixos/`: Configurações de sistema operacional (`configuration.nix`, `flake.nix`, `disko.nix`, `hardware-configuration.nix`).
