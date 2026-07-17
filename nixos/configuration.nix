@@ -102,6 +102,8 @@
       "--write-kubeconfig-group k3sconfig"
       "--tls-san ${config.networking.hostName}"
       "--disable metrics-server"
+      "--secrets-encryption"
+      "--secrets-encryption-provider=secretbox"
     ];
   };
   # Grupo de acesso ao kubeconfig

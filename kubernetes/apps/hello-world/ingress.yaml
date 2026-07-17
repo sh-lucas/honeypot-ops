@@ -3,6 +3,8 @@ kind: Ingress
 metadata:
   name: hello-world
   namespace: default
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: default-cloudflared-only@kubernetescrd
 spec:
   ingressClassName: traefik
   rules:
@@ -16,3 +18,36 @@ spec:
             name: hello-world
             port:
               number: 80
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: cloudflared-only
+  namespace: default
+spec:
+  ipAllowList:
+    sourceRange:
+      - 10.42.0.0/16
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik-only
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      app: hello-world
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - protocol: TCP
+          port: 80

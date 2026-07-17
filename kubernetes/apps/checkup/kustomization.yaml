@@ -3,7 +3,6 @@ kind: Kustomization
 resources:
   - app.yaml
   - storage.yaml
-  - network.yaml  
+  - network.yaml
   - flux-image-policy.yaml
   - flux-image-automation.yaml
-
