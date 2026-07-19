@@ -56,6 +56,8 @@ data:
       filelog:
         include:
           - /var/log/pods/*/*/*.log
+        exclude:
+          - /var/log/pods/observability_*/*/*.log
         include_file_path: true
         start_at: end
         operators:
