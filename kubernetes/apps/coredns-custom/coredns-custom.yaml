@@ -4,6 +4,16 @@ metadata:
   name: coredns-custom
   namespace: kube-system
 data:
+  observe.server: |
+    observe.sh-lucas.dev:53 {
+        hosts {
+            100.72.43.20 observe.sh-lucas.dev
+            fallthrough
+        }
+        forward . /etc/resolv.conf
+        errors
+        cache 30
+    }
   registry.server: |
     registry.sh-lucas.dev:53 {
         hosts {
