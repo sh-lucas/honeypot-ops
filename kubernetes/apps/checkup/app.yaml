@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
         - name: checkup
-          image: registry.sh-lucas.dev/checkup:2026.07.19--032--6b4e2e3 # {"$imagepolicy": "flux-system:checkup"}
+          image: registry.sh-lucas.dev/checkup:2026.07.19--033--10547e4 # {"$imagepolicy": "flux-system:checkup"}
           imagePullPolicy: Always
           ports:
             - containerPort: 80
