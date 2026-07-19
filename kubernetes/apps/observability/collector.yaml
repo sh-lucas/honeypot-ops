@@ -95,9 +95,22 @@ data:
             - k8s.deployment.name
             - k8s.node.name
             - k8s.container.name
+      # Descarta logs de ruído: probes de liveness/readiness, health checks e
+      # requests 2xx em endpoints de health. Isso reduz drasticamente o volume
+      # de dados enviados ao OpenObserve sem perder nada útil.
+      filter/drop_noise:
+        error_mode: ignore
+        logs:
+          log_record:
+            # Descarta linhas que contenham URLs de health/readiness check
+            - 'IsMatch(body, ".*GET /(healthz?|readyz?|api|livez?) .*")'
+            # Descarta 200 OK de qualquer rota de health (nginx, traefik, etc)
+            - 'IsMatch(body, ".*\"(GET|HEAD) /(healthz?|readyz?|livez?).*\" 200.*")'
+            # Descarta logs completamente vazios
+            - 'body == ""'
       batch:
-        timeout: 2s
-        send_batch_size: 512
+        timeout: 5s
+        send_batch_size: 1024
 
     exporters:
       otlphttp/openobserve_logs:
@@ -144,7 +157,7 @@ data:
       pipelines:
         logs:
           receivers: [filelog]
-          processors: [memory_limiter, k8sattributes, batch]
+          processors: [memory_limiter, k8sattributes, filter/drop_noise, batch]
           exporters: [otlphttp/openobserve_logs]
         metrics:
           receivers: [otlp, kubeletstats, hostmetrics]

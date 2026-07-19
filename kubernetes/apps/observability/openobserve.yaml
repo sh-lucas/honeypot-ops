@@ -63,6 +63,16 @@ spec:
               value: /data
             - name: ZO_LOCAL_MODE
               value: "true"
+            # Habilita compactação automática de dados antigos
+            - name: ZO_COMPACT_ENABLED
+              value: "true"
+            # Retenção de dados: remove automaticamente dados com mais de 7 dias
+            # Ajuste conforme o tamanho do seu PVC (20Gi) e o volume de ingestão
+            - name: ZO_COMPACT_DATA_RETENTION_DAYS
+              value: "7"
+            # Intervalo de execução da compactação (em segundos, padrão é 3600)
+            - name: ZO_COMPACT_INTERVAL
+              value: "3600"
           readinessProbe:
             httpGet:
               path: /healthz
