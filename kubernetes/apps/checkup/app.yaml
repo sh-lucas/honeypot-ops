@@ -47,6 +47,10 @@ spec:
                 secretKeyRef:
                   name: checkup-secrets
                   key: JWT_SECRET
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.observability.svc.cluster.local:4318"
+            - name: DEPLOYMENT_ENVIRONMENT
+              value: production
           resources:
             limits:
               cpu: 50m

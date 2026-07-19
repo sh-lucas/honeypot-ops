@@ -6,3 +6,4 @@ resources:
   - registry
   - coredns-custom
   - checkup
+  - observability

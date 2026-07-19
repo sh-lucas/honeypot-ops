@@ -1,0 +1,262 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-collector
+  namespace: observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-collector
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - namespaces
+      - nodes
+      - nodes/stats
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-collector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-collector
+subjects:
+  - kind: ServiceAccount
+    name: otel-collector
+    namespace: observability
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector
+  namespace: observability
+data:
+  config.yaml: |
+    extensions:
+      health_check:
+        endpoint: ${env:POD_IP}:13133
+      basicauth/openobserve:
+        client_auth:
+          username: ${env:OPENOBSERVE_USERNAME}
+          password: ${env:OPENOBSERVE_PASSWORD}
+
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: ${env:POD_IP}:4318
+      filelog:
+        include:
+          - /var/log/pods/*/*/*.log
+        include_file_path: true
+        start_at: end
+        operators:
+          - type: container
+          - type: regex_parser
+            parse_from: attributes["log.file.path"]
+            regex: '^/var/log/pods/(?P<namespace>[^_]+)_(?P<pod>[^_]+)_(?P<uid>[^/]+)/(?P<container>[^/]+)/.+\\.log$'
+          - type: move
+            from: attributes.namespace
+            to: resource["k8s.namespace.name"]
+          - type: move
+            from: attributes.pod
+            to: resource["k8s.pod.name"]
+          - type: move
+            from: attributes.uid
+            to: resource["k8s.pod.uid"]
+          - type: move
+            from: attributes.container
+            to: resource["k8s.container.name"]
+      kubeletstats:
+        collection_interval: 30s
+        auth_type: serviceAccount
+        endpoint: ${env:K8S_NODE_NAME}:10250
+        insecure_skip_verify: true
+        metric_groups:
+          - node
+          - pod
+          - container
+      hostmetrics:
+        collection_interval: 30s
+        root_path: /hostfs
+        scrapers:
+          cpu: {}
+          memory: {}
+          filesystem: {}
+          network: {}
+
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 160
+        spike_limit_mib: 48
+      k8sattributes:
+        auth_type: serviceAccount
+        extract:
+          metadata:
+            - k8s.namespace.name
+            - k8s.pod.name
+            - k8s.pod.uid
+            - k8s.deployment.name
+            - k8s.node.name
+            - k8s.container.name
+      batch:
+        timeout: 2s
+        send_batch_size: 512
+
+    exporters:
+      otlphttp/openobserve_logs:
+        endpoint: http://openobserve.observability.svc.cluster.local:5080/api/default
+        auth:
+          authenticator: basicauth/openobserve
+        headers:
+          stream-name: k8s_logs
+        sending_queue:
+          enabled: true
+          queue_size: 1024
+        retry_on_failure:
+          enabled: true
+      otlphttp/openobserve_metrics:
+        endpoint: http://openobserve.observability.svc.cluster.local:5080/api/default
+        auth:
+          authenticator: basicauth/openobserve
+        headers:
+          stream-name: infrastructure_metrics
+        sending_queue:
+          enabled: true
+          queue_size: 1024
+        retry_on_failure:
+          enabled: true
+      otlphttp/openobserve_traces:
+        endpoint: http://openobserve.observability.svc.cluster.local:5080/api/default
+        auth:
+          authenticator: basicauth/openobserve
+        headers:
+          stream-name: application_traces
+        sending_queue:
+          enabled: true
+          queue_size: 1024
+        retry_on_failure:
+          enabled: true
+
+    service:
+      extensions:
+        - health_check
+        - basicauth/openobserve
+      telemetry:
+        metrics:
+          level: basic
+      pipelines:
+        logs:
+          receivers: [filelog]
+          processors: [memory_limiter, k8sattributes, batch]
+          exporters: [otlphttp/openobserve_logs]
+        metrics:
+          receivers: [otlp, kubeletstats, hostmetrics]
+          processors: [memory_limiter, k8sattributes, batch]
+          exporters: [otlphttp/openobserve_metrics]
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, k8sattributes, batch]
+          exporters: [otlphttp/openobserve_traces]
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-collector
+  namespace: observability
+spec:
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      serviceAccountName: otel-collector
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:0.153.0
+          args:
+            - --config=/conf/config.yaml
+          ports:
+            - name: otlp-http
+              containerPort: 4318
+            - name: health
+              containerPort: 13133
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: OPENOBSERVE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: openobserve-credentials
+                  key: username
+            - name: OPENOBSERVE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: openobserve-credentials
+                  key: password
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+          livenessProbe:
+            httpGet:
+              path: /
+              port: health
+          resources:
+            requests:
+              cpu: 100m
+              memory: 192Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+              readOnly: true
+            - name: pod-logs
+              mountPath: /var/log/pods
+              readOnly: true
+            - name: hostfs
+              mountPath: /hostfs
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector
+        - name: pod-logs
+          hostPath:
+            path: /var/log/pods
+        - name: hostfs
+          hostPath:
+            path: /
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: observability
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
