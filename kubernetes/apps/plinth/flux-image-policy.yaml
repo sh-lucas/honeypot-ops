@@ -1,0 +1,25 @@
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImageRepository
+metadata:
+  name: plinth
+  namespace: flux-system
+spec:
+  image: registry.sh-lucas.dev/plinth
+  interval: 2m
+  secretRef:
+    name: registry-credentials
+---
+apiVersion: image.toolkit.fluxcd.io/v1
+kind: ImagePolicy
+metadata:
+  name: plinth
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: plinth
+  policy:
+    alphabetical:
+      order: asc
+  filterTags:
+    # Filtra tags no formato "YYYY.MM.DD--run--sha"
+    pattern: '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}--[0-9]{3,4}--[a-f0-9]+$'
