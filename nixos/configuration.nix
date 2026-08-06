@@ -171,10 +171,11 @@
     memoryPercent = 50; # 6GB of swap for a 12GB instance
   };
 
-  # Network Performance Optimizations (TCP BBR + Fair Queueing)
+  # Network Performance Optimizations (TCP BBR + Fair Queueing + Fast Socket Reuse)
   boot.kernel.sysctl = {
     "net.core.default_qdisc" = "fq";
     "net.ipv4.tcp_congestion_control" = "bbr";
+    "net.ipv4.tcp_tw_reuse" = 1;
   };
 
   # Nix settings (Flakes, garbage collection)
