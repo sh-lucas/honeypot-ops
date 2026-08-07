@@ -49,6 +49,20 @@ spec:
     # cadeia de ~15 middlewares por request -- e nao sai por configuracao.
     metrics:
       prometheus: null
+    # Alocacao e GC apareceram no profile somando ~12% (mallocgcSmallScanNoHeader
+    # 2,64s, newobject 2,02s, scanobject 0,91s de 33,79s). Com GOGC default e sem
+    # limite de memoria no container, o Go coleta com muito mais frequencia do que
+    # precisa num host de 12GB. GOMEMLIMIT da o teto real; o RSS normal do Traefik
+    # fica em ~50-100MB, entao 400MiB e folga larga.
+    #
+    # Medido, wrk -c50 no caminho de 2 hops:
+    #   antes  7258 rps  268us/req
+    #   depois 7696 rps  254us/req
+    env:
+      - name: GOGC
+        value: "600"
+      - name: GOMEMLIMIT
+        value: "400MiB"
     # O caminho e ports.<entrypoint>.http.middlewares. A variante sem o `http`
     # e aceita sem erro pelo HelmChartConfig e descartada na renderizacao: o
     # Deployment sai sem nenhum arg de middleware e sem rollout. Era esse o
