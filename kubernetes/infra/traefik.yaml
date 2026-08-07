@@ -30,6 +30,25 @@ spec:
     service:
       spec:
         externalTrafficPolicy: Local
+    # Profile de CPU do Traefik sob carga (pprof, 30s a ~6300 rps) apontou
+    # middlewares/metrics.(*metricsMiddleware).ServeHTTP com 29,6% do tempo
+    # total, encadeando ainda observability.(*semConvServerMetrics) -- uma
+    # segunda camada de metricas semanticas OTel.
+    #
+    # Nada consome isso: nao ha Prometheus no cluster e o otel-collector em
+    # apps/observability/collector.yaml so tem receivers otlp, filelog,
+    # kubeletstats e hostmetrics. As anotacoes prometheus.io/scrape do pod nao
+    # tem scraper.
+    #
+    # Medido depois de desligar, mesmo teste (wrk -c50 contra o entrypoint web):
+    #   antes  6543 rps  172us/req
+    #   depois 7195 rps  141us/req
+    #
+    # Para religar em investigacao, basta remover este bloco. O restante do gap
+    # para um nginx equivalente (~30us/req) e estrutural -- runtime do Go e uma
+    # cadeia de ~15 middlewares por request -- e nao sai por configuracao.
+    metrics:
+      prometheus: null
     # O caminho e ports.<entrypoint>.http.middlewares. A variante sem o `http`
     # e aceita sem erro pelo HelmChartConfig e descartada na renderizacao: o
     # Deployment sai sem nenhum arg de middleware e sem rollout. Era esse o
