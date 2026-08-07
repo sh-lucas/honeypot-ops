@@ -1,0 +1,73 @@
+# Mesmo formato das demais policies do repo: entrada restrita, saida em
+# allowlist com as faixas privadas negadas em bloco.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-cloudflared
+  namespace: router
+spec:
+  podSelector:
+    matchLabels:
+      app: router
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cloudflare
+          podSelector:
+            matchLabels:
+              app: cloudflared
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# Saida so para DNS e para as tres aplicacoes publicas. Sem regra de internet:
+# um roteador nao tem motivo para sair da rede.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: router-egress
+  namespace: router
+spec:
+  podSelector:
+    matchLabels:
+      app: router
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: plinth
+          podSelector:
+            matchLabels:
+              app: plinth
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: checkup
+          podSelector:
+            matchLabels:
+              app: checkup
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app: hello-world
+      ports:
+        - protocol: TCP
+          port: 80

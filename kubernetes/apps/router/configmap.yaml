@@ -1,0 +1,99 @@
+# Roteador estatico por header Host. Faz o mesmo trabalho que o Traefik faz no
+# entrypoint `web`, sem watch da API do Kubernetes.
+#
+# Motivo, medido nesta VPS no mesmo caminho de 2 hops (wrk -c50 -> proxy -> plinth):
+#   Traefik  7696 rps  254us/req  149us de kernel/req
+#   nginx   24515 rps   79us/req   61us de kernel/req
+# A infraestrutura de rede e identica nos dois; a diferenca e o custo de syscall
+# e escalonamento do runtime Go. Contagem de segmentos TCP por request e 1.0 nos
+# dois, entao nao e volume de pacote.
+#
+# NAO recebe trafego ainda: o tunel Cloudflare continua apontando para o Traefik.
+# Isto sobe em paralelo para ser medido e comparado antes de qualquer troca.
+#
+# Publicar aplicacao nova aqui = um bloco `upstream` + um bloco `server`.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: router-config
+  namespace: router
+data:
+  nginx.conf: |
+    worker_processes auto;
+    error_log /dev/stderr warn;
+    pid /tmp/nginx.pid;
+
+    events {
+      worker_connections 8192;
+    }
+
+    http {
+      access_log off;
+
+      # A imagem roda com rootfs somente leitura, entao tudo que o nginx precisa
+      # escrever vai para o emptyDir montado em /tmp.
+      client_body_temp_path /tmp/client_body;
+      proxy_temp_path       /tmp/proxy;
+      fastcgi_temp_path     /tmp/fastcgi;
+      uwsgi_temp_path       /tmp/uwsgi;
+      scgi_temp_path        /tmp/scgi;
+
+      sendfile on;
+      tcp_nopush on;
+      server_tokens off;
+
+      # Upgrade de WebSocket. Em request normal $connection_upgrade fica vazio,
+      # que e exatamente o necessario para o keepalive com o upstream funcionar.
+      map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      '';
+      }
+
+      # ATENCAO: nginx open source resolve os nomes de upstream UMA VEZ, no start.
+      # Se o kube-dns estiver fora nesse instante, o nginx recusa a subir e o pod
+      # entra em CrashLoopBackOff ate o DNS voltar (ele se recupera sozinho).
+      # Recriar um Service tambem exige `kubectl rollout restart` aqui.
+      #
+      # A alternativa -- `resolver` + nome em variavel no proxy_pass -- resolve em
+      # tempo de request e sobrevive a DNS fora, mas descarta o bloco `upstream` e
+      # com ele o keepalive para o backend, que e justamente o que sustenta os
+      # 24515 rps medidos. Por isso a escolha aqui e keepalive.
+      upstream plinth      { server plinth.plinth.svc.cluster.local:80;        keepalive 128; }
+      upstream checkup     { server checkup.checkup.svc.cluster.local:80;      keepalive 64;  }
+      upstream hello_world { server hello-world.default.svc.cluster.local:80;  keepalive 64;  }
+
+      proxy_http_version 1.1;
+      proxy_set_header Host              $host;
+      proxy_set_header Upgrade           $http_upgrade;
+      proxy_set_header Connection        $connection_upgrade;
+      proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto https;
+      proxy_read_timeout 60s;
+
+      # Hostname desconhecido cai aqui. Mantem o comportamento atual do wildcard,
+      # em que registry e observe respondem 404 pela Cloudflare.
+      server {
+        listen 8080 default_server reuseport;
+        server_name _;
+        location = /healthz { return 200 "ok\n"; }
+        location /          { return 404; }
+      }
+
+      server {
+        listen 8080;
+        server_name plinth.sh-lucas.dev;
+        location / { proxy_pass http://plinth; }
+      }
+
+      server {
+        listen 8080;
+        server_name checkup.sh-lucas.dev;
+        location / { proxy_pass http://checkup; }
+      }
+
+      server {
+        listen 8080;
+        server_name hello-world.sh-lucas.dev;
+        location / { proxy_pass http://hello_world; }
+      }
+    }

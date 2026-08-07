@@ -8,3 +8,4 @@ resources:
   - checkup
   - observability
   - plinth
+  - router

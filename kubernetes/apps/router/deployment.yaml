@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: router
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: router
+  namespace: router
+  labels:
+    app: router
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: router
+  template:
+    metadata:
+      labels:
+        app: router
+      annotations:
+        # O nginx nao recarrega sozinho quando o ConfigMap muda. Alterar as rotas
+        # exige bater este valor para forcar rollout, ou `kubectl rollout restart`.
+        checksum/config: "v1"
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.30.4-alpine
+          # Ignora o entrypoint da imagem, que faz templating e escreve em disco.
+          command: ["nginx", "-c", "/etc/nginx/nginx.conf", "-g", "daemon off;"]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          # Sem limite de CPU de proposito: e caminho de request, precisa poder
+          # usar folga do no em pico sem sofrer throttle do CFS. O que importa e
+          # ter request garantido para nao cair no peso minimo de cgroup, que foi
+          # o problema que o Traefik teve nesta infra.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: router-config
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: router
+  namespace: router
+spec:
+  type: ClusterIP
+  selector:
+    app: router
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
