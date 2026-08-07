@@ -19,11 +19,10 @@ spec:
             port:
               number: 80
 ---
-# O cloudflared entrega direto aqui; o Traefik segue permitido como rollback.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-ingress
+  name: allow-traefik-only
   namespace: default
 spec:
   podSelector:
@@ -33,12 +32,6 @@ spec:
     - Ingress
   ingress:
     - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: cloudflare
-          podSelector:
-            matchLabels:
-              app: cloudflared
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
