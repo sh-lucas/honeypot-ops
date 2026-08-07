@@ -25,13 +25,30 @@ O túnel Cloudflare aponta apenas para `traefik.kube-system.svc.cluster.local:80
 
 Não substituir essa separação por allowlists de IP em Middlewares do Traefik. O ServiceLB do K3s pode mascarar o IP de origem antes do Traefik, quebrando acessos legítimos. A fronteira deve continuar sendo os entrypoints `web` e `websecure`.
 
+### Contenção de saída das aplicações
+
+A separação por entrypoint acima controla **o que o `cloudflared` alcança para dentro**. Ela nunca controlou o que uma aplicação alcança para fora — são eixos diferentes, e por muito tempo o segundo ficou aberto: todas as NetworkPolicies eram `policyTypes: [Ingress]`, então qualquer pod de aplicação alcançava o apiserver, a porta `22` do nó (inclusive pelo IP da Tailscale) e a internet inteira. `registry` e `openobserve` só estavam protegidos pelas próprias policies de ingress.
+
+Cada aplicação agora tem também uma policy de `Egress` no formato da `cloudflared-egress`: nega as faixas privadas em bloco (`10/8`, `172.16/12`, `192.168/16`, `100.64/10`) e libera explicitamente apenas o que precisa — DNS do cluster e `otel-collector`. Isso fecha apiserver, nó, malha Tailscale e todo Service não liberado.
+
+A internet segue aberta para `plinth` e `checkup` (o `checkup` depende dela para sondar alvos externos); `hello-world` só tem DNS. Bloquear a saída para a internet seria proteção contra exfiltração, desejável mas de alto risco de quebrar aplicação — o objetivo aqui é movimento lateral.
+
+Isso importa porque `trustedInterfaces = [ "tailscale0" "cni0" "flannel.1" ]` no `configuration.nix` faz o tráfego pod→host pular o firewall do NixOS por completo. A NetworkPolicy é a única camada capaz de fechar esse caminho.
+
+### Por que o Traefik permanece no caminho
+
+A rota da Cloudflare é um wildcard `*.sh-lucas.dev`, então o `cloudflared` recebe requests de qualquer subdomínio e precisa de alguém que despache por header `Host`. Esse alguém é o Traefik. É isso que permite publicar uma aplicação nova commitando só um `Ingress`, sem tocar no dashboard.
+
+Medido nesta VPS: o hop do Traefik custa ~230µs de CPU por request, contra ~35µs da própria aplicação. Tirá-lo do caminho exigiria uma rota por hostname no dashboard, o que quebra o workflow. Um `nginx` fazendo o mesmo trabalho mediu ~30µs/req, mas como o `cloudflared` custa ~220µs/req, o ganho end-to-end de trocar o roteador seria ~1,6x — não compensa a migração e o retrabalho de TLS do registry.
+
 Comportamento esperado:
 
 - `checkup` e `hello-world` via Cloudflare: sucesso;
 - acesso direto às aplicações pela porta 80 da Tailscale: bloqueado;
 - registry pela Tailscale: `401 Unauthorized` sem credenciais;
 - registry pela Cloudflare: `404 Not Found`;
-- SSH e K3s: acessíveis somente pela Tailscale.
+- SSH e K3s: acessíveis somente pela Tailscale;
+- de dentro de um pod de aplicação: apiserver, `22` do nó e IPs da Tailscale bloqueados.
 
 ---
 

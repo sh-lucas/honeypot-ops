@@ -33,13 +33,10 @@ spec:
                 port:
                   number: 80
 ---
-# Aceita tanto o cloudflared (caminho novo, direto) quanto o Traefik (caminho
-# antigo). Os dois convivem durante a migracao; o Traefik sai daqui assim que
-# o hostname for repontado no dashboard da Cloudflare.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-ingress
+  name: allow-traefik-only
   namespace: plinth
 spec:
   podSelector:
@@ -49,12 +46,6 @@ spec:
     - Ingress
   ingress:
     - from:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: cloudflare
-          podSelector:
-            matchLabels:
-              app: cloudflared
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
