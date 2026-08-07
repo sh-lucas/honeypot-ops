@@ -49,12 +49,17 @@ spec:
             port: 2000
           initialDelaySeconds: 10
           periodSeconds: 10
+        # Medido em carga externa (200 VUs, 2308 rps): a replica que recebe o
+        # trafego consumiu 390m de CPU, ou seja 78% do limite antigo de 500m.
+        # Acima de ~3000 rps ela entraria em throttle do CFS e viraria gargalo.
+        # O custo por request medido foi ~220us, comparavel ao do Traefik (~230us)
+        # e 6x o da propria aplicacao (~35us).
         resources:
           limits:
-            cpu: 500m
+            cpu: "1"
             memory: 256Mi
           requests:
-            cpu: 100m
+            cpu: 150m
             memory: 128Mi
 ---
 apiVersion: networking.k8s.io/v1
