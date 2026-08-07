@@ -1,3 +1,25 @@
+# Backstop de concorrencia na entrada interna. Nao e um limite de conexoes TCP:
+# o Traefik so oferece cap de conexao para roteadores TCP puros (inFlightConn),
+# e estes aqui sao roteadores HTTP. O que se limita e request simultanea em voo,
+# que protege contra a mesma coisa (exaustao sob pico) sem contar socket aberto.
+#
+# Dimensionamento: o pico medido nesta VPS foi ~195 requests em voo
+# (2308 rps x 84ms de latencia) antes da maquina saturar. 1000 e teto de
+# seguranca deliberado -- nao deve disparar em operacao normal.
+#
+# Sem sourceCriterion de proposito. A versao anterior (fb1d619) usava
+# `requestHost: true`, o que dava um orcamento de 1000 para cada hostname em vez
+# de um limite agregado. O default e por IP de origem, e como todo o trafego
+# externo chega do pod do cloudflared, o efeito pratico e um contador unico.
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: global-inflight
+  namespace: kube-system
+spec:
+  inFlightReq:
+    amount: 1000
+---
 apiVersion: helm.cattle.io/v1
 kind: HelmChartConfig
 metadata:
@@ -8,3 +30,10 @@ spec:
     service:
       spec:
         externalTrafficPolicy: Local
+    ports:
+      web:
+        middlewares:
+          - kube-system-global-inflight@kubernetescrd
+      websecure:
+        middlewares:
+          - kube-system-global-inflight@kubernetescrd
