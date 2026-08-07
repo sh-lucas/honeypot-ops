@@ -30,10 +30,19 @@ spec:
     service:
       spec:
         externalTrafficPolicy: Local
+    # O caminho e ports.<entrypoint>.http.middlewares. A variante sem o `http`
+    # e aceita sem erro pelo HelmChartConfig e descartada na renderizacao: o
+    # Deployment sai sem nenhum arg de middleware e sem rollout. Era esse o
+    # defeito do fb1d619, ou seja, aquele limitador nunca esteve ativo.
+    # Conferir com:
+    #   kubectl get deploy -n kube-system traefik \
+    #     -o jsonpath='{.spec.template.spec.containers[0].args}' | tr ',' '\n' | grep middlewares
     ports:
       web:
-        middlewares:
-          - kube-system-global-inflight@kubernetescrd
+        http:
+          middlewares:
+            - kube-system-global-inflight@kubernetescrd
       websecure:
-        middlewares:
-          - kube-system-global-inflight@kubernetescrd
+        http:
+          middlewares:
+            - kube-system-global-inflight@kubernetescrd
