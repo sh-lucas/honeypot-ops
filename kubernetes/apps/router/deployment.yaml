@@ -108,23 +108,11 @@ spec:
       port: 80
       targetPort: http
       protocol: TCP
----
-# Exposicao direta na internet, sem tunel. O ServiceLB do k3s liga a 443 do host
-# nesta Service, entao o Traefik precisa deixar de expor `websecure` -- ver o
-# HelmChartConfig em infra/traefik.yaml. Isso derruba registry e observe pela
-# Tailscale ate serem reconfigurados.
-apiVersion: v1
-kind: Service
-metadata:
-  name: router-public
-  namespace: router
-spec:
-  type: LoadBalancer
-  externalTrafficPolicy: Local
-  selector:
-    app: router
-  ports:
-    - name: https
-      port: 443
-      targetPort: https
-      protocol: TCP
+# A exposicao direta na 443 foi medida e revertida. Resultado: sem o tunel o
+# servidor ficou em ~45% de CPU e a vazao nao subiu, porque o limite passou a ser
+# a rede do cliente. O caminho "CF proxy -> origem comum" ficou pior ainda, com o
+# no em 27%. O tunel entrega melhor por manter conexoes QUIC persistentes com o
+# edge, em vez de pagar setup de conexao por request.
+#
+# O listener TLS na 8443 e o Certificate seguem existindo, dormentes: reexpor e
+# so recriar um Service LoadBalancer aqui e reabrir a porta no firewall.

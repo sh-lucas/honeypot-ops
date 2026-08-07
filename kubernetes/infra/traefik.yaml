@@ -76,15 +76,9 @@ spec:
           middlewares:
             - kube-system-global-inflight@kubernetescrd
       websecure:
-        # Libera a porta 443 do host, que passa a ser do router (apps/router).
-        # O ServiceLB do k3s so permite um dono por porta.
-        #
-        # CONSEQUENCIA: registry.sh-lucas.dev e observe.sh-lucas.dev deixam de
-        # responder pela Tailscale, e o containerd para de conseguir puxar
-        # imagens de registry.sh-lucas.dev -- o que trava a automacao de imagem
-        # do Flux. Feito a pedido, para expor o plinth direto e medir sem tunel.
-        expose:
-          default: false
+        # Volta a expor a 443 do host: registry e observe dependem desta porta
+        # pela Tailscale, e o containerd puxa imagens de registry.sh-lucas.dev
+        # por ela. Ficou fechada durante o teste de exposicao direta.
         http:
           middlewares:
             - kube-system-global-inflight@kubernetescrd
