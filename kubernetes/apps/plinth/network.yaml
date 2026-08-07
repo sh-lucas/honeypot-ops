@@ -33,10 +33,13 @@ spec:
                 port:
                   number: 80
 ---
+# O cloudflared entrega direto aqui. O Traefik continua permitido de proposito:
+# o Ingress dele segue existindo como caminho de rollback, entao voltar atras e
+# so reverter a configuracao do tunel, sem mexer em policy.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-traefik-only
+  name: allow-ingress
   namespace: plinth
 spec:
   podSelector:
@@ -46,6 +49,12 @@ spec:
     - Ingress
   ingress:
     - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cloudflare
+          podSelector:
+            matchLabels:
+              app: cloudflared
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system

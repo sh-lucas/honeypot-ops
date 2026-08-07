@@ -1,3 +1,38 @@
+# Regras de roteamento do tunel. Antes isto vivia no painel da Cloudflare e
+# mandava tudo para o Traefik, que entao roteava por header Host. Agora o
+# proprio cloudflared decide, o que remove um proxy inteiro do caminho de toda
+# request publica -- medido em 13,9% da CPU do no, mais duas travessias extras
+# da stack de rede do kernel por request.
+#
+# Publicar aplicacao nova = adicionar duas linhas em `ingress` aqui. O DNS
+# wildcard *.sh-lucas.dev no painel continua igual e nao precisa ser tocado:
+# ele so diz "essa request vai para o tunel", nao o que fazer com ela depois.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-ingress
+  namespace: cloudflare
+data:
+  ingress.yaml: |
+    # keepAliveConnections precisa ficar aqui porque, ao sair da configuracao
+    # remota, o valor ajustado no painel deixa de ser aplicado. Medido: com o
+    # default de 100, acima de ~100 de concorrencia o pool estoura e vira uma
+    # conexao TCP nova a cada 5 requests.
+    originRequest:
+      keepAliveConnections: 1000
+      keepAliveTimeout: 90s
+    ingress:
+      - hostname: plinth.sh-lucas.dev
+        service: http://plinth.plinth.svc.cluster.local:80
+      - hostname: checkup.sh-lucas.dev
+        service: http://checkup.checkup.svc.cluster.local:80
+      - hostname: hello-world.sh-lucas.dev
+        service: http://hello-world.default.svc.cluster.local:80
+      # Catch-all do wildcard. Mantem o comportamento atual de registry e
+      # observe pela Cloudflare, que hoje respondem 404 -- eles so devem ser
+      # alcancaveis pela Tailscale.
+      - service: http_status:404
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,6 +42,14 @@ metadata:
     app: cloudflared
 spec:
   replicas: 2
+  # maxUnavailable 0: o pod novo precisa conectar no edge e ficar Ready antes
+  # de qualquer pod antigo sair. Se a configuracao local estiver quebrada, o
+  # rollout trava com o tunel antigo ainda servindo, em vez de derrubar tudo.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: cloudflared
@@ -14,12 +57,64 @@ spec:
     metadata:
       labels:
         app: cloudflared
+      annotations:
+        # Forca rollout quando as regras de ingress mudarem, ja que ConfigMap
+        # montado nao reinicia o processo sozinho.
+        checksum/ingress: "v1"
     spec:
       priorityClassName: system-cluster-critical
+      # Rodar com configuracao local exige um arquivo de credenciais em vez do
+      # token. Os tres campos necessarios ja estao dentro do proprio token
+      # (a/t/s -> AccountTag/TunnelID/TunnelSecret), entao ele continua sendo a
+      # unica fonte de verdade e nenhum segredo novo precisa ser criado.
+      initContainers:
+        - name: render-config
+          image: busybox:1.37.0
+          command:
+            - sh
+            - -euc
+            - |
+              echo -n "$TUNNEL_TOKEN" | base64 -d \
+                | sed 's/"a":/"AccountTag":/; s/"t":/"TunnelID":/; s/"s":/"TunnelSecret":/' \
+                > /run/cloudflared/credentials.json
+              ID=$(sed 's/.*"TunnelID":"\([^"]*\)".*/\1/' /run/cloudflared/credentials.json)
+              [ -n "$ID" ] || { echo "nao consegui extrair o TunnelID do token"; exit 1; }
+              printf 'tunnel: %s\ncredentials-file: /run/cloudflared/credentials.json\n' "$ID" \
+                > /run/cloudflared/config.yaml
+              cat /etc/cloudflared-ingress/ingress.yaml >> /run/cloudflared/config.yaml
+          env:
+            - name: TUNNEL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflare-tunnel-token
+                  key: token
+          volumeMounts:
+            - name: run
+              mountPath: /run/cloudflared
+            - name: ingress
+              mountPath: /etc/cloudflared-ingress
+              readOnly: true
+        # Valida as regras com o proprio binario antes de servir. Config quebrada
+        # falha aqui, o pod nunca fica Ready, e como maxUnavailable e 0 o tunel
+        # anterior segue no ar em vez de cair.
+        - name: validate-config
+          image: cloudflare/cloudflared:2026.7.2
+          args:
+            - --config
+            - /run/cloudflared/config.yaml
+            - tunnel
+            - ingress
+            - validate
+          volumeMounts:
+            - name: run
+              mountPath: /run/cloudflared
+              readOnly: true
       containers:
       - name: cloudflared
         image: cloudflare/cloudflared:2026.7.2
         args:
+        - --config
+        - /run/cloudflared/config.yaml
         - tunnel
         - --no-autoupdate
         - --edge-ip-version
@@ -27,12 +122,6 @@ spec:
         - --metrics
         - 0.0.0.0:2000
         - run
-        env:
-        - name: TUNNEL_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: cloudflare-tunnel-token
-              key: token
         ports:
         - name: metrics
           containerPort: 2000
@@ -52,8 +141,6 @@ spec:
         # Medido em carga externa (200 VUs, 2308 rps): a replica que recebe o
         # trafego consumiu 390m de CPU, ou seja 78% do limite antigo de 500m.
         # Acima de ~3000 rps ela entraria em throttle do CFS e viraria gargalo.
-        # O custo por request medido foi ~220us, comparavel ao do Traefik (~230us)
-        # e 6x o da propria aplicacao (~35us).
         resources:
           limits:
             cpu: "1"
@@ -61,6 +148,16 @@ spec:
           requests:
             cpu: 150m
             memory: 128Mi
+        volumeMounts:
+          - name: run
+            mountPath: /run/cloudflared
+            readOnly: true
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: ingress
+          configMap:
+            name: cloudflared-ingress
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -86,22 +183,32 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # Unico destino interno permitido: o entrypoint `web` do Traefik, que roteia
-    # por header Host. O wildcard *.sh-lucas.dev entrega aqui requests de
-    # qualquer subdominio, entao esse roteamento e o que permite declarar uma
-    # aplicacao nova so com um Ingress, sem tocar no dashboard da Cloudflare.
-    # Medido: o hop do Traefik custa ~230us de CPU por request. Esse e o preco
-    # do roteamento por Host; um bypass exigiria uma rota por hostname.
+    # Allowlist do que e alcancavel pela internet. Antes esta fronteira era o
+    # entrypoint `web` do Traefik, e qualquer Ingress novo com aquele entrypoint
+    # virava publico automaticamente. Agora expor algo exige editar esta policy
+    # junto com as regras de ingress acima: falha fechado em vez de aberto.
     - to:
         - namespaceSelector:
             matchLabels:
-              kubernetes.io/metadata.name: kube-system
+              kubernetes.io/metadata.name: plinth
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: traefik
+              app: plinth
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: checkup
+          podSelector:
+            matchLabels:
+              app: checkup
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app: hello-world
       ports:
         - protocol: TCP
-          port: 8000
+          port: 80
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
