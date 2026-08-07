@@ -86,12 +86,24 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    # Unico destino interno permitido: o entrypoint `web` do Traefik, que roteia
-    # por header Host. O wildcard *.sh-lucas.dev entrega aqui requests de
-    # qualquer subdominio, entao esse roteamento e o que permite declarar uma
-    # aplicacao nova so com um Ingress, sem tocar no dashboard da Cloudflare.
-    # Medido: o hop do Traefik custa ~230us de CPU por request. Esse e o preco
-    # do roteamento por Host; um bypass exigiria uma rota por hostname.
+    # Destino atual: o router nginx, que faz o roteamento por header Host que o
+    # Traefik fazia. A porta e 8080 -- a do POD, nao a 80 do Service, porque a
+    # policy e avaliada depois do DNAT do kube-proxy.
+    #
+    # Medido na mesma rota trivial, 200 conexoes: 6778 rps via Traefik contra
+    # 17381 rps via router.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: router
+          podSelector:
+            matchLabels:
+              app: router
+      ports:
+        - protocol: TCP
+          port: 8080
+    # Traefik continua permitido como caminho de rollback: basta reapontar o
+    # destino do tunel no painel de volta, sem mexer em policy.
     - to:
         - namespaceSelector:
             matchLabels:
