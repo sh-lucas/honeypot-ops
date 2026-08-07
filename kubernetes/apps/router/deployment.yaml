@@ -108,11 +108,18 @@ spec:
       port: 80
       targetPort: http
       protocol: TCP
-# A exposicao direta na 443 foi medida e revertida. Resultado: sem o tunel o
-# servidor ficou em ~45% de CPU e a vazao nao subiu, porque o limite passou a ser
-# a rede do cliente. O caminho "CF proxy -> origem comum" ficou pior ainda, com o
-# no em 27%. O tunel entrega melhor por manter conexoes QUIC persistentes com o
-# edge, em vez de pagar setup de conexao por request.
+# A exposicao direta na 443 foi montada, medida e revertida -- mas o resultado
+# FAVORECE expor direto, e o que motivou reverter foi o custo colateral, nao o
+# desempenho. Normalizado por 1000 rps na mesma rota:
 #
-# O listener TLS na 8443 e o Certificate seguem existindo, dormentes: reexpor e
-# so recriar um Service LoadBalancer aqui e reabrir a porta no firewall.
+#   tunel -> router          21,1% do no
+#   direto, sem Cloudflare   15,3% do no   <- ~27% mais barato por request
+#
+# O cloudflared custa 16,1% do no de forma continua. Tira-lo e a unica forma de
+# recuperar essa fatia; o TLS nao some, passa do edge para o nginx.
+#
+# O que impede hoje: dar a 443 ao router obriga o Traefik a soltar `websecure`,
+# o que derruba registry e openobserve pela Tailscale e trava o pull de imagem.
+#
+# O listener TLS na 8443 e o Certificate curinga seguem dormentes. O passo a
+# passo completo para reexpor esta no README, secao "Opcao arquivada".

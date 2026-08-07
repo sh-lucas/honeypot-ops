@@ -18,12 +18,14 @@ Este repositório contém a configuração declarativa de infraestrutura para um
 
 Existem dois grupos de serviços, e eles não devem compartilhar o mesmo caminho de entrada:
 
-- **Cloudflare somente**: aplicações públicas autenticadas pelo Cloudflare, como `checkup` e `hello-world`. Seus Ingresses usam exclusivamente o entrypoint Traefik `web` (porta 80 interna), que é o destino do `cloudflared`.
-- **Tailscale somente**: SSH, API do K3s e registry. SSH (`22`) e K3s (`6443`) são liberados somente em `tailscale0`; o Ingress do registry usa exclusivamente o entrypoint `websecure` (`443`).
+- **Cloudflare somente**: aplicações públicas como `plinth`, `checkup` e `hello-world`. O túnel entrega no **router** (`kubernetes/apps/router`), um nginx estático que despacha por header `Host`.
+- **Tailscale somente**: SSH, API do K3s, registry e openobserve. SSH (`22`) e K3s (`6443`) são liberados somente em `tailscale0`; os Ingresses de registry e openobserve usam exclusivamente o entrypoint Traefik `websecure` (`443`), que é onde o Traefik ainda atua.
 
-O túnel Cloudflare aponta apenas para `traefik.kube-system.svc.cluster.local:80`. Portanto, ele não consegue alcançar o registry em `websecure`. A porta 80 não é permitida pela interface Tailscale, enquanto a porta 443 é. O firewall da Oracle bloqueia IPv4 e IPv6 externamente, e o firewall do host fornece uma segunda camada.
+A rota da Cloudflare é o wildcard `*.sh-lucas.dev`, então o `cloudflared` recebe request de qualquer subdomínio e precisa de alguém que despache por `Host`. Esse alguém é o router. Publicar aplicação nova é adicionar um `upstream` e um `server` no ConfigMap dele, mais uma entrada na allowlist de egress do `cloudflared` — sem tocar no painel.
 
-Não substituir essa separação por allowlists de IP em Middlewares do Traefik. O ServiceLB do K3s pode mascarar o IP de origem antes do Traefik, quebrando acessos legítimos. A fronteira deve continuar sendo os entrypoints `web` e `websecure`.
+O `cloudflared` só alcança o router (`8080`) e o Traefik (`8000`), por NetworkPolicy. Essa allowlist é a fronteira do que é publicamente alcançável: expor algo exige editá-la, então falha fechado. O firewall da Oracle bloqueia tudo externamente e o firewall do host é a segunda camada.
+
+Não substituir essa separação por allowlists de IP em Middlewares do Traefik. O ServiceLB do K3s pode mascarar o IP de origem, quebrando acessos legítimos.
 
 ### Contenção de saída das aplicações
 
@@ -35,11 +37,47 @@ A internet segue aberta para `plinth` e `checkup` (o `checkup` depende dela para
 
 Isso importa porque `trustedInterfaces = [ "tailscale0" "cni0" "flannel.1" ]` no `configuration.nix` faz o tráfego pod→host pular o firewall do NixOS por completo. A NetworkPolicy é a única camada capaz de fechar esse caminho.
 
-### Por que o Traefik permanece no caminho
+### Custo de CPU do caminho de entrada
 
-A rota da Cloudflare é um wildcard `*.sh-lucas.dev`, então o `cloudflared` recebe requests de qualquer subdomínio e precisa de alguém que despache por header `Host`. Esse alguém é o Traefik. É isso que permite publicar uma aplicação nova commitando só um `Ingress`, sem tocar no dashboard.
+O gargalo desta VPS nunca foi throughput bruto: era CPU gasta por request em intermediários. Medido com o benchmark real do plinth (200 workers), como fração do nó de 2 vCPU:
 
-Medido nesta VPS: o hop do Traefik custa ~230µs de CPU por request, contra ~35µs da própria aplicação. Tirá-lo do caminho exigiria uma rota por hostname no dashboard, o que quebra o workflow. Um `nginx` fazendo o mesmo trabalho mediu ~30µs/req, mas como o `cloudflared` custa ~220µs/req, o ganho end-to-end de trocar o roteador seria ~1,6x — não compensa a migração e o retrabalho de TLS do registry.
+| bloco | % do nó | fatia |
+|---|---|---|
+| **aplicação** (`plinth`) | 23,0% | 28% |
+| entrada (`cloudflared` 16,1 + softirq 14,6 + `nginx` 4,2) | 34,9% | 42% |
+| observabilidade (`otel` 11,1 + `openobserve` 4,1 + `containerd` 5,1) | 20,3% | 24% |
+| plataforma (`k3s`, resto) | ~5% | 6% |
+
+O Traefik ocupava **12,1% do nó** nesse mesmo lugar onde o nginx ocupa **4,2%** — 2,9x mais caro pelo mesmo trabalho. A causa foi confirmada por profile de CPU (pprof) sob carga: ~30% do tempo dele era o middleware de métricas mais uma segunda camada de métricas semânticas OTel, ambas sem consumidor no cluster; o resto se divide entre runtime do Go e uma cadeia de ~15 middlewares por request. Em A/B interno, mesma rota e mesmo backend: **6.778 rps via Traefik contra 17.381 via nginx**.
+
+Duas notas de método, para não repetir erros:
+
+- **Vazão medida de fora não serve como métrica desta infra.** As medições variaram até 3x entre execuções com servidor idêntico e ocioso, porque o limite era o link do cliente. O que é reprodutível é CPU por request medida no servidor.
+- **A stack de rede do kernel não é o problema.** O caminho interno atravessa as mesmas cadeias de iptables, veth, bridge, conntrack e NetworkPolicy, e faz 32.867 rps com 35µs de kernel por request.
+
+### Opção arquivada: expor direto, sem `cloudflared`
+
+O `cloudflared` custa **16,1% do nó de forma contínua** — é um túnel QUIC com criptografia, não um roteador, então esse custo é o piso da arquitetura atual. Tirá-lo é a única forma de recuperar essa fatia.
+
+Foi montado, medido e revertido. Normalizando por 1.000 rps na mesma rota:
+
+| caminho | nó por 1.000 rps |
+|---|---|
+| túnel → router | 21,1% |
+| **direto, sem Cloudflare** | **15,3%** |
+| Cloudflare proxy → origem comum | pior de todos; o edge não empurra além de ~1.200 rps |
+
+**Direto é ~27% mais barato por request.** Não é mais que isso porque o TLS não desaparece, muda de dono: a Cloudflare deixa de terminar e o nginx passa a terminar — barato com cache de sessão, mas não zero. Na carga real isso libera algo entre 11% e 13% da máquina, permanentemente.
+
+A infraestrutura está **dormente e pronta**: o listener TLS na `8443` do router e o `Certificate` curinga (`*.sh-lucas.dev`, emitido por DNS01, que não exige porta aberta) continuam existindo. Para reexpor:
+
+1. recriar um `Service` do tipo `LoadBalancer` em `apps/router/deployment.yaml`, porta `443` → `targetPort: https`;
+2. adicionar em `apps/router/network.yaml` uma regra de ingress sem `from` na porta `8443`;
+3. em `nixos/configuration.nix`, abrir `443` em **dois** lugares — `allowedTCPPorts` **e** um `ACCEPT` na cadeia `public-block`, que roda antes no `mangle PREROUTING` e descartaria o pacote antes do DNAT do K3s;
+4. no Traefik (`infra/traefik.yaml`), `ports.websecure.expose.default: false`, porque o ServiceLB do K3s só admite um dono por porta;
+5. na Cloudflare, DNS apontando para o IP público com **proxy desligado**; na Oracle, liberar `443` — de preferência com whitelist de IP.
+
+**Custo:** o passo 4 derruba `registry` e `openobserve` pela Tailscale, e com eles o pull de imagem do containerd e a automação de imagem do Flux. Só faz sentido junto com uma solução alternativa de TLS para esses dois. O commit `c819511` tem a implementação completa e o `d81cec1` a reversão.
 
 Comportamento esperado:
 
