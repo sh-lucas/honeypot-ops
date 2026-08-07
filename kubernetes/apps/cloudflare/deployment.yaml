@@ -86,6 +86,8 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    # Caminho antigo, via Traefik. Sai quando os 3 hostnames publicos estiverem
+    # repontados no dashboard da Cloudflare.
     - to:
         - namespaceSelector:
             matchLabels:
@@ -96,6 +98,32 @@ spec:
       ports:
         - protocol: TCP
           port: 8000
+    # Caminho novo, direto para cada aplicacao publica. Esta lista passa a ser
+    # a fronteira do que e alcancavel pela internet: antes, qualquer Ingress
+    # novo com entrypoint `web` virava publico automaticamente; agora expor algo
+    # exige editar esta policy. Falha fechado em vez de aberto.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: plinth
+          podSelector:
+            matchLabels:
+              app: plinth
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: checkup
+          podSelector:
+            matchLabels:
+              app: checkup
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+          podSelector:
+            matchLabels:
+              app: hello-world
+      ports:
+        - protocol: TCP
+          port: 80
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

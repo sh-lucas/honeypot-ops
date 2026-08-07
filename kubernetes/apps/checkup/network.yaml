@@ -33,10 +33,12 @@ spec:
                 port:
                   number: 80
 ---
+# Aceita tanto o cloudflared (caminho novo, direto) quanto o Traefik (caminho
+# antigo). Os dois convivem durante a migracao.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-traefik-only
+  name: allow-ingress
   namespace: checkup
 spec:
   podSelector:
@@ -48,6 +50,12 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
+              kubernetes.io/metadata.name: cloudflare
+          podSelector:
+            matchLabels:
+              app: cloudflared
+        - namespaceSelector:
+            matchLabels:
               kubernetes.io/metadata.name: kube-system
           podSelector:
             matchLabels:
@@ -55,3 +63,49 @@ spec:
       ports:
         - protocol: TCP
           port: 80
+---
+# Allowlist de saida. A internet continua liberada porque o checkup depende
+# dela para sondar alvos externos; o que fecha e o acesso lateral a rede
+# interna (apiserver, no, Tailscale, demais Services).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: checkup-egress
+  namespace: checkup
+spec:
+  podSelector:
+    matchLabels:
+      app: checkup
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+          podSelector:
+            matchLabels:
+              app: otel-collector
+      ports:
+        - protocol: TCP
+          port: 4318
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 100.64.0.0/10
