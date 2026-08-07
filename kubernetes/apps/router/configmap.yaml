@@ -70,10 +70,21 @@ data:
       proxy_set_header X-Forwarded-Proto https;
       proxy_read_timeout 60s;
 
-      # Hostname desconhecido cai aqui. Mantem o comportamento atual do wildcard,
-      # em que registry e observe respondem 404 pela Cloudflare.
+      # Sessao TLS reaproveitada entre requests: sem isto cada conexao nova paga
+      # um handshake completo, que e o custo que volta ao expor direto em vez de
+      # deixar o edge da Cloudflare terminar.
+      ssl_certificate     /etc/nginx/tls/tls.crt;
+      ssl_certificate_key /etc/nginx/tls/tls.key;
+      ssl_protocols       TLSv1.2 TLSv1.3;
+      ssl_session_cache   shared:SSL:20m;
+      ssl_session_timeout 1h;
+      ssl_session_tickets on;
+
+      # Hostname desconhecido cai aqui, nas duas portas.
       server {
         listen 8080 default_server reuseport;
+        listen 8443 ssl default_server reuseport;
+        http2 on;
         server_name _;
         location = /healthz { return 200 "ok\n"; }
         location /          { return 404; }
@@ -81,18 +92,24 @@ data:
 
       server {
         listen 8080;
+        listen 8443 ssl;
+        http2 on;
         server_name plinth.sh-lucas.dev;
         location / { proxy_pass http://plinth; }
       }
 
       server {
         listen 8080;
+        listen 8443 ssl;
+        http2 on;
         server_name checkup.sh-lucas.dev;
         location / { proxy_pass http://checkup; }
       }
 
       server {
         listen 8080;
+        listen 8443 ssl;
+        http2 on;
         server_name hello-world.sh-lucas.dev;
         location / { proxy_pass http://hello_world; }
       }

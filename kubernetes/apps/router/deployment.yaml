@@ -38,6 +38,9 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            - name: https
+              containerPort: 8443
+              protocol: TCP
           readinessProbe:
             httpGet:
               path: /healthz
@@ -77,13 +80,20 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            - name: tls
+              mountPath: /etc/nginx/tls
+              readOnly: true
       volumes:
         - name: config
           configMap:
             name: router-config
         - name: tmp
           emptyDir: {}
+        - name: tls
+          secret:
+            secretName: wildcard-tls
 ---
+# ClusterIP: e por aqui que o cloudflared entrega hoje.
 apiVersion: v1
 kind: Service
 metadata:
@@ -97,4 +107,24 @@ spec:
     - name: http
       port: 80
       targetPort: http
+      protocol: TCP
+---
+# Exposicao direta na internet, sem tunel. O ServiceLB do k3s liga a 443 do host
+# nesta Service, entao o Traefik precisa deixar de expor `websecure` -- ver o
+# HelmChartConfig em infra/traefik.yaml. Isso derruba registry e observe pela
+# Tailscale ate serem reconfigurados.
+apiVersion: v1
+kind: Service
+metadata:
+  name: router-public
+  namespace: router
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: router
+  ports:
+    - name: https
+      port: 443
+      targetPort: https
       protocol: TCP

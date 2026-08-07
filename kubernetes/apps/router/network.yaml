@@ -22,6 +22,12 @@ spec:
       ports:
         - protocol: TCP
           port: 8080
+    # Porta publica. Sem `from`, aceita qualquer origem -- e o ponto: o trafego
+    # chega direto da internet pela 443 do host, sem tunel e sem a Cloudflare no
+    # meio. So a 8443 e aberta assim; a 8080 continua restrita ao cloudflared.
+    - ports:
+        - protocol: TCP
+          port: 8443
 ---
 # Saida so para DNS e para as tres aplicacoes publicas. Sem regra de internet:
 # um roteador nao tem motivo para sair da rede.

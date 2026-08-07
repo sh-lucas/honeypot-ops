@@ -1,0 +1,16 @@
+# Certificado curinga emitido por DNS01 via Cloudflare, entao nao depende de
+# nenhuma porta aberta para validar. Cobre todos os subdominios de uma vez, o
+# que evita ter que emitir um certificado por aplicacao.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-tls
+  namespace: router
+spec:
+  secretName: wildcard-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.sh-lucas.dev"
+    - "sh-lucas.dev"

@@ -47,7 +47,11 @@
   # Firewall
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [ ]; # Closed to the public internet
+    # 443 exposta na internet publica para o router nginx (kubernetes/apps/router),
+    # servindo *.sh-lucas.dev direto, sem passar pelo tunel da Cloudflare.
+    # Abrir aqui nao basta: a cadeia public-block abaixo dropa tudo que entra por
+    # enp0s6 antes desta regra valer, entao ha um ACCEPT correspondente la.
+    allowedTCPPorts = [ 443 ];
     allowedUDPPorts = [ 41641 ]; # Tailscale direct connections
     trustedInterfaces = [ "tailscale0" "cni0" "flannel.1" ]; # Trust Tailscale and K3s interfaces
 
@@ -65,6 +69,10 @@
       iptables -t mangle -A public-block -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
       iptables -t mangle -A public-block -p udp --dport 41641 -j ACCEPT
       iptables -t mangle -A public-block -p udp --dport 68 -j ACCEPT
+      # HTTPS publico para o router nginx. Precisa estar aqui alem do
+      # allowedTCPPorts: esta cadeia roda antes, no mangle PREROUTING, e o DROP
+      # final descartaria o pacote antes de o K3s fazer o DNAT.
+      iptables -t mangle -A public-block -p tcp --dport 443 -j ACCEPT
       iptables -t mangle -A public-block -j DROP
       
       iptables -t mangle -D PREROUTING -i enp0s6 -j public-block 2>/dev/null || true
