@@ -4,7 +4,50 @@
   # State version
   system.stateVersion = "24.11";
 
-  boot.kernelPackages = pkgs.linuxPackages_latest;
+  # LTS em vez de `linuxPackages_latest`. O `_latest` trazia 7.1.3; nao havia
+  # motivo de hardware para estar na ponta -- a NIC e virtio_net e a CPU e uma
+  # Neoverse N1 (ARMv8.2), ambas suportadas ha muitas versoes. LTS troca reboot
+  # frequente e risco de regressao por previsibilidade.
+  boot.kernelPackages = pkgs.linuxPackages;
+
+  # Desliga a zeragem de heap em toda alocacao.
+  #
+  # O kernel do NixOS sobe com `mem auto-init: stack:all(zero), heap alloc:on`,
+  # que e o mesmo default do Ubuntu 22.04/24.04 -- ou seja, nas opcoes caras a
+  # config ja era equivalente. Isto aqui vai ALEM do Ubuntu: `init_on_alloc=0`
+  # remove o memset de toda alocacao de slab/pagina, que num proxy e pago uma
+  # vez por skb. `page_poison=0` desliga o CONFIG_PAGE_POISONING, que o Ubuntu
+  # nem compila.
+  #
+  # O que NAO da para mexer por boot param, e por isso ficou de fora:
+  #   - INIT_STACK_ALL_ZERO   -> so em tempo de compilacao
+  #   - PREEMPT full          -> CONFIG_PREEMPT_DYNAMIC nao esta setado, entao
+  #                              nao existe `preempt=voluntary` aqui
+  #   - LIST_HARDENED, HARDENED_USERCOPY, RANDOM_KMALLOC_CACHES -> idem
+  # Tirar esses exigiria `structuredExtraConfig`, o que significa compilar
+  # kernel em 2 cores N1 e sair do cache binario para sempre. Nao compensa.
+  #
+  # Custo de seguranca assumido: heap nao inicializada volta a poder vazar
+  # conteudo de alocacao anterior por bug de use-of-uninitialized. Aceitavel
+  # aqui porque a superficie exposta e so o tunel Cloudflare.
+  #
+  # Medido nesta VPS, mediana de 3 repeticoes, antes (7.1.3) -> depois (6.18.38
+  # + params). Arquivos em ~/bench-antes.txt e ~/bench-depois2.txt no no:
+  #
+  #   MICRO   mmap+touch          3407 -> 3854 MB/s   +13,1%  <- sonda do init_on_alloc
+  #           syscall getpid      9,58 -> 10,47 M/s    +9,3%  <- ganho do kernel, nao do param
+  #           tcp loopback RT    41283 -> 43133/s      +4,5%
+  #   MACRO   plinth direto      34020 -> 40476 rps   +19,0%
+  #           router -> plinth   16301 -> 17111 rps    +5,0%
+  #           router /healthz    72980 -> 76393 rps    +4,7%
+  #           router TLS         13111 -> 13734 rps    +4,8%
+  #   CONTROLE AES-128-GCM        2,78 -> 2,77 GB/s    -0,4%  (inalterado, offload intacto)
+  #
+  # Atencao ao medir de novo: a primeira rodada pos-reboot deu -35% em
+  # /healthz com variancia de 20%. Era ruido -- flux e openobserve ainda
+  # digerindo o boot. Espera load1 < 0,10 antes de confiar no numero, e ignora
+  # load5/load15, que ficam inflados pelo proprio wrk da rodada anterior.
+  boot.kernelParams = [ "init_on_alloc=0" "init_on_free=0" "page_poison=0" ];
 
   # Networking
   networking.hostName = "oracle";
