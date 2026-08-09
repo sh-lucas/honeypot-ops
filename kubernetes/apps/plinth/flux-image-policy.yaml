@@ -4,9 +4,7 @@ metadata:
   name: plinth
   namespace: flux-system
 spec:
-  # :8443 é o listener do router nginx que aceita pods (allow 10.42.0.0/16);
-  # a 443 do tailnet só funciona vinda do host/kubelet, não de pod.
-  image: registry.sh-lucas.dev:8443/plinth
+  image: registry.sh-lucas.dev/plinth
   interval: 2m
   secretRef:
     name: registry-credentials
