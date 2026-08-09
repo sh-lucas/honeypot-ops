@@ -200,6 +200,15 @@ ${lib.concatMapStrings (cidr: ''
       iptables -t nat -A PREROUTING -i enp0s6 -p tcp --dport 443 -j REDIRECT --to-port 8443
       iptables -t nat -D PREROUTING -i tailscale0 -p tcp --dport 443 -j REDIRECT --to-port 8443 2>/dev/null || true
       iptables -t nat -A PREROUTING -i tailscale0 -p tcp --dport 443 -j REDIRECT --to-port 8443
+      # Pods chegam na 443 pelo cni0 (bridge do flannel) quando o destino e a
+      # propria IP tailscale do host (ex.: o image-reflector do flux escaneando
+      # registry.sh-lucas.dev). Sem o REDIRECT aqui, nada escuta na 443 nesse
+      # caminho e o scan morre com connection refused -- so o host/kubelet, que
+      # sai pelo tailscale0, continuava funcionando.
+      iptables -t nat -D PREROUTING -i cni0 -p tcp --dport 443 -j REDIRECT --to-port 8443 2>/dev/null || true
+      iptables -t nat -A PREROUTING -i cni0 -p tcp --dport 443 -j REDIRECT --to-port 8443
+      iptables -t nat -D PREROUTING -i flannel.1 -p tcp --dport 443 -j REDIRECT --to-port 8443 2>/dev/null || true
+      iptables -t nat -A PREROUTING -i flannel.1 -p tcp --dport 443 -j REDIRECT --to-port 8443
 
       # --- Egresso do router, por uid ---
       #
