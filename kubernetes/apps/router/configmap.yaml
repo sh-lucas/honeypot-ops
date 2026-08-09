@@ -62,6 +62,14 @@ data:
       upstream checkup     { server checkup.checkup.svc.cluster.local:80;      keepalive 64;  }
       upstream hello_world { server hello-world.default.svc.cluster.local:80;  keepalive 64;  }
 
+      # Servicos internos. So existem no listener 8443, que e o alcancado pela
+      # 443 do host -- e a 443 do host so recebe da Tailscale (a cadeia
+      # public-block do NixOS deixa passar da internet, mas o `deny` abaixo
+      # corta por IP de origem). Nao entram na 8080, que e a porta do
+      # cloudflared, entao nao ha caminho pela Cloudflare ate eles.
+      upstream registry_up { server registry.registry.svc.cluster.local:5000;        keepalive 32; }
+      upstream observe_up  { server openobserve.observability.svc.cluster.local:5080; keepalive 32; }
+
       proxy_http_version 1.1;
       proxy_set_header Host              $host;
       proxy_set_header Upgrade           $http_upgrade;
@@ -112,5 +120,44 @@ data:
         http2 on;
         server_name hello-world.sh-lucas.dev;
         location / { proxy_pass http://hello_world; }
+      }
+
+      # --- Servicos internos: somente Tailscale ---
+      #
+      # `externalTrafficPolicy: Local` no Service router-public preserva o IP de
+      # origem, entao aqui chega o 100.x real do tailnet em vez de um IP
+      # mascarado pelo SNAT. Sem isso este allow/deny nao funcionaria.
+      #
+      # 100.64.0.0/10 e a faixa CGNAT que o Tailscale usa. Qualquer outra origem
+      # -- inclusive a internet publica na 443 -- leva 403 antes de tocar o
+      # backend. Sem `listen 8080`: o cloudflared nao tem caminho ate aqui.
+
+      server {
+        listen 8443 ssl;
+        http2 on;
+        server_name registry.sh-lucas.dev;
+
+        allow 100.64.0.0/10;
+        deny  all;
+
+        # Push de imagem sobe blobs grandes: sem isto o nginx corta em 1MB e
+        # bufferiza em disco o que passar. O zot lida com o streaming.
+        client_max_body_size 0;
+        proxy_request_buffering off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+
+        location / { proxy_pass http://registry_up; }
+      }
+
+      server {
+        listen 8443 ssl;
+        http2 on;
+        server_name observe.sh-lucas.dev;
+
+        allow 100.64.0.0/10;
+        deny  all;
+
+        location / { proxy_pass http://observe_up; }
       }
     }

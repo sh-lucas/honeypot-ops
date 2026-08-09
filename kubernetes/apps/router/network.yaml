@@ -77,3 +77,26 @@ spec:
       ports:
         - protocol: TCP
           port: 80
+    # Servicos internos, servidos so no listener 8443 e so para origem Tailscale
+    # (ver o allow/deny no configmap). Portas diferentes das apps publicas, entao
+    # precisam de regra propria.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: registry
+          podSelector:
+            matchLabels:
+              app: registry
+      ports:
+        - protocol: TCP
+          port: 5000
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: observability
+          podSelector:
+            matchLabels:
+              app: openobserve
+      ports:
+        - protocol: TCP
+          port: 5080
