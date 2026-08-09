@@ -209,6 +209,12 @@ ${lib.concatMapStrings (cidr: ''
       iptables -t nat -A PREROUTING -i cni0 -p tcp --dport 443 -j REDIRECT --to-port 8443
       iptables -t nat -D PREROUTING -i flannel.1 -p tcp --dport 443 -j REDIRECT --to-port 8443 2>/dev/null || true
       iptables -t nat -A PREROUTING -i flannel.1 -p tcp --dport 443 -j REDIRECT --to-port 8443
+      # O kubelet/containerd conecta da propria rede do host (nao passa por
+      # PREROUTING de interface nenhuma): a conexao para a propria IP tailscale
+      # sai pelo OUTPUT como entrega local. Sem o REDIRECT aqui, o pull de
+      # imagem nova morre com connection refused na 443.
+      iptables -t nat -D OUTPUT -d 100.64.0.0/10 -p tcp --dport 443 -j REDIRECT --to-port 8443 2>/dev/null || true
+      iptables -t nat -A OUTPUT -d 100.64.0.0/10 -p tcp --dport 443 -j REDIRECT --to-port 8443
 
       # --- Egresso do router, por uid ---
       #
