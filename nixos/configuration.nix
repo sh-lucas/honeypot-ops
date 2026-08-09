@@ -160,6 +160,11 @@
       "--disable metrics-server"
       "--secrets-encryption"
       "--secrets-encryption-provider=secretbox"
+      # O cluster tem um no so: o VXLAN do flannel nunca encapsula nada, mas
+      # cobra os 50 bytes de header mesmo assim (cni0/flannel.1 em MTU 1450
+      # contra 9000 do host). host-gw troca o encapsulamento por uma rota
+      # simples e deixa a MTU do bridge seguir a da interface fisica.
+      "--flannel-backend=host-gw"
     ];
   };
   # Grupo de acesso ao kubeconfig

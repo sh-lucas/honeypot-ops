@@ -15,8 +15,11 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+      # maxSurge 0 e obrigatorio junto com hostPort: duas replicas nao podem
+      # disputar a 443 do host, o pod novo ficaria Pending e travaria o rollout.
+      # Custa um instante de indisponibilidade a cada deploy do router.
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: router
@@ -40,6 +43,12 @@ spec:
               protocol: TCP
             - name: https
               containerPort: 8443
+              # Elimina o hop do klipper-lb (svclb): o portmap do CNI faz o DNAT
+              # 443 -> 8443 direto no netns do host, uma travessia de pod a menos
+              # por request. Medido em loopback: 19,4 us/req e 29% de vazao.
+              # O container continua bindando 8443 como nao-root; quem abre a 443
+              # e o portmap, no host.
+              hostPort: 443
               protocol: TCP
           readinessProbe:
             httpGet:
@@ -109,31 +118,13 @@ spec:
       targetPort: http
       protocol: TCP
 ---
-# REEXPOSTO PARA MEDICAO. O ServiceLB do k3s liga a 443 do host nesta Service,
-# entao o Traefik precisa deixar de expor `websecure` -- ver infra/traefik.yaml.
-# Isso derruba registry e observe pela Tailscale enquanto estiver valendo.
+# A Service `router-public` do tipo LoadBalancer foi REMOVIDA. Ela existia so
+# para o ServiceLB do k3s ligar a 443 do host no router, e cada request pagava
+# uma travessia extra de netns no pod do klipper-lb. Hoje quem publica a 443 e o
+# `hostPort` la em cima, sem pod intermediario.
 #
-# Historico das medicoes anteriores, normalizado por 1000 rps na mesma rota:
+# Efeito colateral esperado: o DaemonSet `svclb-router-public` em kube-system
+# some sozinho quando esta Service deixa de existir.
 #
-#   tunel -> router          21,1% do no
-#   direto, sem Cloudflare   15,3% do no   <- ~27% mais barato por request
-#
-# O que esta rodada quer responder: a VM de teste sem k3s serve o mesmo plinth a
-# 7,9% de um core por 1000 rps sobre rede real. O caminho via tunel neste cluster
-# custa ~63%. Se o direto ficar proximo de 8%, o custo era fila do cloudflared;
-# se ficar em ~31% como na medicao anterior, o problema esta no proprio setup.
-apiVersion: v1
-kind: Service
-metadata:
-  name: router-public
-  namespace: router
-spec:
-  type: LoadBalancer
-  externalTrafficPolicy: Local
-  selector:
-    app: router
-  ports:
-    - name: https
-      port: 443
-      targetPort: https
-      protocol: TCP
+# Se precisar voltar atras, e recriar esta Service como LoadBalancer e tirar o
+# hostPort do container -- os dois nao podem coexistir disputando a 443.
