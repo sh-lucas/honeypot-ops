@@ -6,10 +6,8 @@ metadata:
   labels:
     app: cloudflared
 spec:
-  # TEMPORARIO: desligado para medir o caminho direto na 443 (wildcard A
-  # *.sh-lucas.dev -> 147.15.105.66, proxied). O tunel respondia por ~70% do
-  # custo de CPU do ingresso: ~63% de core por 1000 rps contra 19,0% direto.
-  # Voltar para 2 se precisar de rollback.
+  # Fora do caminho de dados (o wildcard A *.sh-lucas.dev -> 147.15.105.66
+  # vai direto na 443). Rollback: subir o replicas e apontar o destino no painel.
   replicas: 0
   selector:
     matchLabels:

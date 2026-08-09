@@ -33,7 +33,7 @@ spec:
                 port:
                   number: 80
 ---
-# Traefik segue servindo o trafego; o router entra so para medicao paralela.
+# O router (hostNetwork) serve as apps publicas; Traefik acima e rollback.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

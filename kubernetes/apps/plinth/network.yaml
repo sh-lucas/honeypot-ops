@@ -33,8 +33,7 @@ spec:
                 port:
                   number: 80
 ---
-# Traefik continua sendo quem serve o trafego real. O router entra so para poder
-# ser medido em paralelo; nada roteia para ele ainda.
+# O router (hostNetwork) serve as apps publicas; Traefik acima e rollback.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

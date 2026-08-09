@@ -102,7 +102,7 @@ in
 
   users.users.lucas = {
     isNormalUser = true;
-    extraGroups = [ "wheel" "k3sconfig" ]; # Enable ‘sudo’ for the user.
+    extraGroups = [ "wheel" "k3sconfig" ]; # wheel = sudo (com senha); k3sconfig = leitura do kubeconfig do K3s
     openssh.authorizedKeys.keys = [
       "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDKoegVux238kUTvIqRW/tYUQWzGBNspA2t8lnlP19xvPlVvn1TvXLeZBAek3bifDD1LXv8YBkMrjKAITcYnaibVA7pxbs01fmwP1SmwWVfF0B2fq5e3nWlSaAmMxT2JBvNV0iSEn9Xh/l6tWtWW3gBp8J3vwI93q7wXvLD4P6aYrDulyoa5q0EXReLoSpVGwl+udwKTDM1XyVIyCAEdm2satmWZUvGdPDuBINV3KwoGfgaDHDpBDw2EyUM6kFbWFFUOuySfWzGeWHwctlf4fvFYrbRyWOQ4HmgS/TSO+R2UkBJsevLiXw6/Y+uNKG//7QMI3/VLbmL8oqgRZNZ3dzB ssh-key-2026-07-01"
     ];

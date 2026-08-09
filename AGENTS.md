@@ -4,13 +4,12 @@ Instruct me, verify nixos configurations, and ask for permission for "ssh sudo" 
 
 ## Setups and Objectives
 
-The VPS is deployed at oracle cloud. Public ingress arrives on TCP 443 straight at
-the origin IP (`147.15.105.66`), served by the nginx router; Cloudflare still sits in
-front as a proxy (wildcard A record, orange cloud) and terminates TLS for clients.
-The cloudflared tunnel is being retired -- it cost ~70% of the CPU of the ingress path.
-`tailscale0` is the internal mesh and is how `registry`/`observe` are reached.
-
-Pending: restrict TCP 443 on `enp0s6` to Cloudflare's published IP ranges, so the
-origin cannot be hit directly by anyone who learns the IP.
+The VPS is deployed at oracle cloud. Ingress: TCP 443 straight at the origin IP
+(`147.15.105.66`), served by the nginx router (`kubernetes/apps/router`, hostNetwork,
+REDIRECT to 8443); Cloudflare in front (wildcard A, proxied) terminates TLS. Only
+Cloudflare IPs reach the 443 (`cloudflareIPv4` list, mangle chain `public-block` in
+`nixos/configuration.nix`).
+cloudflared is retired (`replicas: 0`, rollback). `tailscale0` is the mesh;
+`registry`/`observe` are served by the router on 8443, private origin only.
 
 Images are already pushed to the private repository and you can pull them with podman when connected to the tailnet. Do not mess with my docker setup.

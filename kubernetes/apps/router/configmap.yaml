@@ -8,8 +8,8 @@
 # e escalonamento do runtime Go. Contagem de segmentos TCP por request e 1.0 nos
 # dois, entao nao e volume de pacote.
 #
-# NAO recebe trafego ainda: o tunel Cloudflare continua apontando para o Traefik.
-# Isto sobe em paralelo para ser medido e comparado antes de qualquer troca.
+# Caminho atual: roteador de entrada. 443 do host -> REDIRECT -> :8443.
+# cloudflared em `replicas: 0`, fora do caminho de dados (rollback).
 #
 # Publicar aplicacao nova aqui = um bloco `upstream` + um bloco `server`.
 apiVersion: v1
