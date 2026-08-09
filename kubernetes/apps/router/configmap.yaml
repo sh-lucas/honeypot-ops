@@ -122,22 +122,38 @@ data:
         location / { proxy_pass http://hello_world; }
       }
 
-      # --- Servicos internos: somente Tailscale ---
+      # --- Servicos internos: fechados para a internet publica ---
       #
-      # `externalTrafficPolicy: Local` no Service router-public preserva o IP de
-      # origem, entao aqui chega o 100.x real do tailnet em vez de um IP
-      # mascarado pelo SNAT. Sem isso este allow/deny nao funcionaria.
+      # MEDIDO, nao suposto. Os dois caminhos chegam com IP de origem diferente:
       #
-      # 100.64.0.0/10 e a faixa CGNAT que o Tailscale usa. Qualquer outra origem
-      # -- inclusive a internet publica na 443 -- leva 403 antes de tocar o
-      # backend. Sem `listen 8080`: o cloudflared nao tem caminho ate aqui.
+      #   internet -> 443 do no  ->  client: 179.42.127.182  (IP real preservado)
+      #   Tailscale -> 443 do no ->  client: 10.42.0.26      (pod do svclb)
+      #
+      # O `externalTrafficPolicy: Local` preserva a origem quando o destino e o
+      # external IP do Service (10.0.0.91). Trafego da Tailscale chega em
+      # 100.72.43.20, que nao casa, entao o klipper-lb faz SNAT para o proprio
+      # pod. Por isso filtrar por 100.64.0.0/10 NAO funciona -- foi tentado e
+      # deu 403 no tailnet.
+      #
+      # A regra abaixo se apoia no lado que e confiavel: a internet chega com IP
+      # publico real, e nenhuma faixa privada casa com ela.
+      #
+      # LIMITE: qualquer pod do cluster casa 10.42.0.0/16 e alcanca estes hosts.
+      # Nao e regressao -- registry.registry.svc e openobserve.observability.svc
+      # ja sao alcancaveis de dentro do cluster pelo ClusterIP. O que esta regra
+      # garante e que a internet publica nao chega.
+      #
+      # Sem `listen 8080` de proposito: a 8080 e a porta do cloudflared, entao
+      # nao existe rota pela Cloudflare ate aqui, independente do filtro de IP.
 
       server {
         listen 8443 ssl;
         http2 on;
         server_name registry.sh-lucas.dev;
 
-        allow 100.64.0.0/10;
+        allow 10.42.0.0/16;   # pods -- e por aqui que chega o trafego da Tailscale
+        allow 10.0.0.0/24;    # subnet da VCN
+        allow 100.64.0.0/10;  # CGNAT do Tailscale, se algum dia chegar sem SNAT
         deny  all;
 
         # Push de imagem sobe blobs grandes: sem isto o nginx corta em 1MB e
@@ -155,7 +171,9 @@ data:
         http2 on;
         server_name observe.sh-lucas.dev;
 
-        allow 100.64.0.0/10;
+        allow 10.42.0.0/16;   # pods -- e por aqui que chega o trafego da Tailscale
+        allow 10.0.0.0/24;    # subnet da VCN
+        allow 100.64.0.0/10;  # CGNAT do Tailscale, se algum dia chegar sem SNAT
         deny  all;
 
         location / { proxy_pass http://observe_up; }
