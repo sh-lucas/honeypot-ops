@@ -108,18 +108,32 @@ spec:
       port: 80
       targetPort: http
       protocol: TCP
-# A exposicao direta na 443 foi montada, medida e revertida -- mas o resultado
-# FAVORECE expor direto, e o que motivou reverter foi o custo colateral, nao o
-# desempenho. Normalizado por 1000 rps na mesma rota:
+---
+# REEXPOSTO PARA MEDICAO. O ServiceLB do k3s liga a 443 do host nesta Service,
+# entao o Traefik precisa deixar de expor `websecure` -- ver infra/traefik.yaml.
+# Isso derruba registry e observe pela Tailscale enquanto estiver valendo.
+#
+# Historico das medicoes anteriores, normalizado por 1000 rps na mesma rota:
 #
 #   tunel -> router          21,1% do no
 #   direto, sem Cloudflare   15,3% do no   <- ~27% mais barato por request
 #
-# O cloudflared custa 16,1% do no de forma continua. Tira-lo e a unica forma de
-# recuperar essa fatia; o TLS nao some, passa do edge para o nginx.
-#
-# O que impede hoje: dar a 443 ao router obriga o Traefik a soltar `websecure`,
-# o que derruba registry e openobserve pela Tailscale e trava o pull de imagem.
-#
-# O listener TLS na 8443 e o Certificate curinga seguem dormentes. O passo a
-# passo completo para reexpor esta no README, secao "Opcao arquivada".
+# O que esta rodada quer responder: a VM de teste sem k3s serve o mesmo plinth a
+# 7,9% de um core por 1000 rps sobre rede real. O caminho via tunel neste cluster
+# custa ~63%. Se o direto ficar proximo de 8%, o custo era fila do cloudflared;
+# se ficar em ~31% como na medicao anterior, o problema esta no proprio setup.
+apiVersion: v1
+kind: Service
+metadata:
+  name: router-public
+  namespace: router
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: router
+  ports:
+    - name: https
+      port: 443
+      targetPort: https
+      protocol: TCP
