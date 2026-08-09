@@ -1,4 +1,34 @@
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
+
+let
+  # Faixas IPv4 da Cloudflare -- a unica origem autorizada a falar com a 443
+  # publica. Fixadas aqui de proposito, e nao buscadas em runtime: um fetch no
+  # boot cria dependencia de rede para o firewall subir, e uma falha silenciosa
+  # de download viraria ou um firewall aberto ou o site inteiro fora do ar.
+  #
+  # Fonte: https://www.cloudflare.com/ips-v4
+  # Sincronizado em 2026-08-09. A lista muda raramente, mas quando muda o
+  # sintoma e cruel: uma fatia dos visitantes toma timeout e o resto funciona.
+  # Conferir com:
+  #   diff <(curl -s https://www.cloudflare.com/ips-v4) <(lista abaixo)
+  cloudflareIPv4 = [
+    "173.245.48.0/20"
+    "103.21.244.0/22"
+    "103.22.200.0/22"
+    "103.31.4.0/22"
+    "141.101.64.0/18"
+    "108.162.192.0/18"
+    "190.93.240.0/20"
+    "188.114.96.0/20"
+    "197.234.240.0/22"
+    "198.41.128.0/17"
+    "162.158.0.0/15"
+    "104.16.0.0/13"
+    "104.24.0.0/14"
+    "172.64.0.0/13"
+    "131.0.72.0/22"
+  ];
+in
 
 {
   # State version
@@ -127,11 +157,19 @@
       iptables -t mangle -A public-block -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
       iptables -t mangle -A public-block -p udp --dport 41641 -j ACCEPT
       iptables -t mangle -A public-block -p udp --dport 68 -j ACCEPT
-      # HTTPS publico para o router nginx. Precisa estar aqui alem do
-      # allowedTCPPorts: esta cadeia roda antes, no mangle PREROUTING, e o DROP
-      # final descartaria o pacote antes de o K3s fazer o DNAT.
-      iptables -t mangle -A public-block -p tcp --dport 443 -j ACCEPT
-      iptables -t mangle -A public-block -j DROP
+      # HTTPS publico para o router nginx, SO das faixas da Cloudflare. Precisa
+      # estar aqui alem do allowedTCPPorts: esta cadeia roda antes, no mangle
+      # PREROUTING, e o DROP final descartaria o pacote antes do REDIRECT.
+      #
+      # Efeito: quem descobrir 147.15.105.66 e bater direto nao passa mais --
+      # nao ha como pular o WAF, o rate limit nem o TLS do edge. O tailnet nao
+      # e afetado: entra por tailscale0 e e avaliado na cadeia tailscale-block.
+      #
+      # CUSTO: teste com `curl --resolve ... 147.15.105.66` para de funcionar de
+      # fora do tailnet. Para depurar o origin, use a Tailscale.
+${lib.concatMapStrings (cidr: ''
+      iptables -t mangle -A public-block -p tcp --dport 443 -s ${cidr} -j ACCEPT
+'') cloudflareIPv4}      iptables -t mangle -A public-block -j DROP
       
       iptables -t mangle -D PREROUTING -i enp0s6 -j public-block 2>/dev/null || true
       iptables -t mangle -A PREROUTING -i enp0s6 -j public-block
