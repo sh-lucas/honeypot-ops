@@ -56,3 +56,16 @@ spec:
       ports:
         - protocol: TCP
           port: 5000
+    # O router nginx passou a servir registry.sh-lucas.dev no listener 8443,
+    # restrito a origem privada. O Traefik continua liberado acima como caminho
+    # de rollback, mas ja nao expoe `websecure`.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: router
+          podSelector:
+            matchLabels:
+              app: router
+      ports:
+        - protocol: TCP
+          port: 5000
