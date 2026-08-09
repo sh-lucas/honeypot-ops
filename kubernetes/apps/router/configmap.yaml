@@ -62,11 +62,10 @@ data:
       upstream checkup     { server checkup.checkup.svc.cluster.local:80;      keepalive 64;  }
       upstream hello_world { server hello-world.default.svc.cluster.local:80;  keepalive 64;  }
 
-      # Servicos internos. So existem no listener 8443, que e o alcancado pela
-      # 443 do host -- e a 443 do host so recebe da Tailscale (a cadeia
-      # public-block do NixOS deixa passar da internet, mas o `deny` abaixo
-      # corta por IP de origem). Nao entram na 8080, que e a porta do
-      # cloudflared, entao nao ha caminho pela Cloudflare ate eles.
+      # Servicos internos. So existem no listener 8443, alcancado pela 443 do
+      # host via REDIRECT. A internet chega ate esse listener, mas o `deny all`
+      # por IP de origem la embaixo e quem corta. Nao entram na 8080, que hoje
+      # escuta apenas em 127.0.0.1.
       upstream registry_up { server registry.registry.svc.cluster.local:5000;        keepalive 32; }
       upstream observe_up  { server openobserve.observability.svc.cluster.local:5080; keepalive 32; }
 
@@ -90,7 +89,7 @@ data:
 
       # Hostname desconhecido cai aqui, nas duas portas.
       server {
-        listen 8080 default_server reuseport;
+        listen 127.0.0.1:8080 default_server reuseport;
         listen 8443 ssl default_server reuseport;
         http2 on;
         server_name _;
@@ -99,7 +98,7 @@ data:
       }
 
       server {
-        listen 8080;
+        listen 127.0.0.1:8080;
         listen 8443 ssl;
         http2 on;
         server_name plinth.sh-lucas.dev;
@@ -107,7 +106,7 @@ data:
       }
 
       server {
-        listen 8080;
+        listen 127.0.0.1:8080;
         listen 8443 ssl;
         http2 on;
         server_name checkup.sh-lucas.dev;
@@ -115,7 +114,7 @@ data:
       }
 
       server {
-        listen 8080;
+        listen 127.0.0.1:8080;
         listen 8443 ssl;
         http2 on;
         server_name hello-world.sh-lucas.dev;
@@ -124,27 +123,27 @@ data:
 
       # --- Servicos internos: fechados para a internet publica ---
       #
-      # MEDIDO, nao suposto. Os dois caminhos chegam com IP de origem diferente:
+      # O nginx roda no netns do host (hostNetwork), entao NAO ha mais SNAT de
+      # klipper-lb no meio e o IP de origem chega real nos dois caminhos:
       #
-      #   internet -> 443 do no  ->  client: 179.42.127.182  (IP real preservado)
-      #   Tailscale -> 443 do no ->  client: 10.42.0.26      (pod do svclb)
+      #   internet  -> 443 -> REDIRECT 8443 -> client: IP publico real
+      #   Tailscale -> 443 -> REDIRECT 8443 -> client: 100.64.0.0/10 (peer real)
+      #   pods      -> 8443                 -> client: 10.42.0.0/16
       #
-      # O `externalTrafficPolicy: Local` preserva a origem quando o destino e o
-      # external IP do Service (10.0.0.91). Trafego da Tailscale chega em
-      # 100.72.43.20, que nao casa, entao o klipper-lb faz SNAT para o proprio
-      # pod. Por isso filtrar por 100.64.0.0/10 NAO funciona -- foi tentado e
-      # deu 403 no tailnet.
+      # O REDIRECT do netfilter nao reescreve origem, so destino. A observacao
+      # antiga de que "filtrar por 100.64.0.0/10 nao funciona" era efeito do
+      # svclb, que nao existe mais -- hoje essa faixa e o caminho normal do
+      # tailnet e foi verificada respondendo 401/308.
       #
-      # A regra abaixo se apoia no lado que e confiavel: a internet chega com IP
-      # publico real, e nenhuma faixa privada casa com ela.
+      # A regra se apoia no lado confiavel: a internet chega com IP publico real,
+      # e nenhuma faixa privada casa com ela.
       #
       # LIMITE: qualquer pod do cluster casa 10.42.0.0/16 e alcanca estes hosts.
       # Nao e regressao -- registry.registry.svc e openobserve.observability.svc
       # ja sao alcancaveis de dentro do cluster pelo ClusterIP. O que esta regra
       # garante e que a internet publica nao chega.
       #
-      # Sem `listen 8080` de proposito: a 8080 e a porta do cloudflared, entao
-      # nao existe rota pela Cloudflare ate aqui, independente do filtro de IP.
+      # Sem `listen 8080` de proposito, e a 8080 hoje so escuta em 127.0.0.1.
 
       server {
         listen 8443 ssl;

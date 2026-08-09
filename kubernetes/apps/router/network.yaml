@@ -1,5 +1,27 @@
-# Mesmo formato das demais policies do repo: entrada restrita, saida em
-# allowlist com as faixas privadas negadas em bloco.
+# ATENCAO: ESTAS DUAS POLICIES ESTAO INERTES.
+#
+# O router passou a rodar com `hostNetwork: true` (ver deployment.yaml), e
+# NetworkPolicy nao se aplica a pod no netns do host -- o kube-router avalia
+# policy no veth do pod, que este pod nao tem mais. Nada aqui e enforcado.
+#
+# Onde o isolamento mora hoje, em nixos/configuration.nix:
+#
+#   ingresso  cadeias mangle public-block (enp0s6) e tailscale-block (tailscale0).
+#             Allowlist de porta que sempre valeu no host, nunca dependeu de
+#             netpol: da internet so entra a 443; do tailnet, 22/53/443/6443.
+#             As 8443 e 8080 nao sao alcancaveis de fora, e a 8080 ainda escuta
+#             so em 127.0.0.1.
+#   egresso   cadeia router-egress, casada por `--uid-owner 101`, com a mesma
+#             lista de destinos das regras abaixo (DNS, :80 das apps, :5000 do
+#             registry, :5080 do observe) e DROP no resto.
+#
+# Os objetos foram mantidos, e nao apagados, porque voltam a valer sozinhos no
+# instante em que alguem tirar o hostNetwork -- que e o caminho de rollback.
+# Se mexer nos destinos aqui, mexa tambem na cadeia router-egress, senao as duas
+# metades divergem em silencio.
+#
+# Formato original: entrada restrita, saida em allowlist com as faixas privadas
+# negadas em bloco.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

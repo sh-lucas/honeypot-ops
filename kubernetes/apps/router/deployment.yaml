@@ -32,6 +32,22 @@ spec:
         # exige bater este valor para forcar rollout, ou `kubectl rollout restart`.
         checksum/config: "v1"
     spec:
+      # O router e um proxy: cada request atravessa o netns do pod QUATRO vezes
+      # (recebe do cliente, manda pro upstream, recebe a resposta, devolve). Medido
+      # com contagem por interface: veth do router 4,05 pacotes/req de um total de
+      # 10,13. No netns do host essas 4 somem e sobram 6 -- o mesmo numero da VM de
+      # teste sem k3s, que serve a mesma carga por 11,9% de core/1000rps contra os
+      # 16,0% daqui. 58% do custo atual e softirq, que e o que travessia consome.
+      #
+      # ISOLAMENTO: NetworkPolicy nao se aplica a pod no netns do host. O ingresso
+      # continua fechado pelas cadeias public-block/tailscale-block do NixOS, que
+      # so deixam entrar a 443 e sempre valeram no host (nao eram netpol). O egresso
+      # foi reconstruido em nixos/configuration.nix como allowlist por uid 101.
+      hostNetwork: true
+      # Obrigatorio com hostNetwork: sem isto o pod herda o /etc/resolv.conf do host
+      # (127.0.0.53, systemd-resolved) e o nginx nao resolve os nomes
+      # *.svc.cluster.local dos upstreams -- ele resolve no start e recusa subir.
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: nginx
           image: nginx:1.30.4-alpine
@@ -41,25 +57,27 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            # Com hostNetwork estas portas ja sao portas do host; hostPort seria
+            # redundante (e conflita). Quem publica a 443 e o REDIRECT 443->8443
+            # em nixos/configuration.nix, para o nginx seguir rodando como uid 101
+            # sem NET_BIND_SERVICE e sem baixar ip_unprivileged_port_start.
             - name: https
               containerPort: 8443
-              # Elimina o hop do klipper-lb (svclb): o portmap do CNI faz o DNAT
-              # 443 -> 8443 direto no netns do host, uma travessia de pod a menos
-              # por request. Medido em loopback: 19,4 us/req e 29% de vazao.
-              # O container continua bindando 8443 como nao-root; quem abre a 443
-              # e o portmap, no host.
-              hostPort: 443
               protocol: TCP
+          # `host: 127.0.0.1` e obrigatorio: com hostNetwork o kubelet sondaria o
+          # IP do no, e a 8080 agora escuta so no loopback (ver configmap).
           readinessProbe:
             httpGet:
               path: /healthz
               port: http
+              host: 127.0.0.1
             initialDelaySeconds: 2
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /healthz
               port: http
+              host: 127.0.0.1
             initialDelaySeconds: 5
             periodSeconds: 20
           # Sem limite de CPU de proposito: e caminho de request, precisa poder

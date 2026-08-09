@@ -140,6 +140,50 @@
       
       iptables -t mangle -D PREROUTING -i tailscale0 -j tailscale-block 2>/dev/null || true
       iptables -t mangle -A PREROUTING -i tailscale0 -j tailscale-block
+
+      # --- Publicacao da 443 no router (kubernetes/apps/router) ---
+      #
+      # O router roda com hostNetwork e o nginx escuta 8443 como uid 101, sem
+      # NET_BIND_SERVICE. Este REDIRECT e o que liga a 443 nele, e substitui o
+      # `hostPort` (que nao existe com hostNetwork) e o ServiceLB do k3s.
+      # REDIRECT so reescreve destino: o IP de origem chega intacto no nginx, que
+      # e o que sustenta o `deny all` de registry/observe no configmap.
+      iptables -t nat -D PREROUTING -i enp0s6 -p tcp --dport 443 -j REDIRECT --to-port 8443 2>/dev/null || true
+      iptables -t nat -A PREROUTING -i enp0s6 -p tcp --dport 443 -j REDIRECT --to-port 8443
+      iptables -t nat -D PREROUTING -i tailscale0 -p tcp --dport 443 -j REDIRECT --to-port 8443 2>/dev/null || true
+      iptables -t nat -A PREROUTING -i tailscale0 -p tcp --dport 443 -j REDIRECT --to-port 8443
+
+      # --- Egresso do router, por uid ---
+      #
+      # NetworkPolicy nao alcanca pod no netns do host, entao a policy de egresso
+      # que existia em apps/router/network.yaml virou inerte. Esta cadeia repoe a
+      # mesma garantia num lugar que ainda vale: o nginx roda como uid 101 (livre
+      # no host, conferido) e so pode falar com a rede de pods nas portas dos
+      # servicos declarados. Qualquer outro destino -- inclusive a internet -- e
+      # dropado.
+      #
+      # DIFERENCA em relacao a policy antiga: filtra por porta na faixa de pods,
+      # nao por label de pod. O nat OUTPUT roda antes do filter OUTPUT, entao
+      # quando a regra ve o pacote o ClusterIP 10.43.x ja virou o IP do pod
+      # 10.42.x -- casar por Service aqui nao e possivel.
+      iptables -N router-egress 2>/dev/null || true
+      iptables -F router-egress
+
+      iptables -A router-egress -o lo -j ACCEPT
+      iptables -A router-egress -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+      # kube-dns. O ClusterIP 10.43.0.10 ja foi DNATado para o pod do CoreDNS.
+      iptables -A router-egress -d 10.42.0.0/16 -p udp --dport 53 -j ACCEPT
+      iptables -A router-egress -d 10.42.0.0/16 -p tcp --dport 53 -j ACCEPT
+      # plinth, checkup, hello-world
+      iptables -A router-egress -d 10.42.0.0/16 -p tcp --dport 80 -j ACCEPT
+      # registry (zot)
+      iptables -A router-egress -d 10.42.0.0/16 -p tcp --dport 5000 -j ACCEPT
+      # openobserve
+      iptables -A router-egress -d 10.42.0.0/16 -p tcp --dport 5080 -j ACCEPT
+      iptables -A router-egress -j DROP
+
+      iptables -D OUTPUT -m owner --uid-owner 101 -j router-egress 2>/dev/null || true
+      iptables -A OUTPUT -m owner --uid-owner 101 -j router-egress
     '';
   };
 
