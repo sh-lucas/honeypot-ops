@@ -99,7 +99,17 @@
     # servindo *.sh-lucas.dev direto, sem passar pelo tunel da Cloudflare.
     # Abrir aqui nao basta: a cadeia public-block abaixo dropa tudo que entra por
     # enp0s6 antes desta regra valer, entao ha um ACCEPT correspondente la.
-    allowedTCPPorts = [ 443 ];
+    # 8443 entra aqui junto com a 443 por causa da ordem das tabelas do netfilter:
+    # o REDIRECT da 443 acontece em `nat PREROUTING`, que roda ANTES do
+    # `filter INPUT`, entao o INPUT ve o pacote ja traduzido, com dport 8443.
+    # Sem esta entrada o pacote publico morre no drop padrao do INPUT -- e so o
+    # tailnet funciona, por tailscale0 ser trustedInterface.
+    #
+    # Isto NAO expoe a 8443 na internet: a cadeia public-block roda antes de tudo,
+    # em `mangle PREROUTING`, e la o pacote ainda tem o dport original. Quem bater
+    # direto em 147.15.105.66:8443 casa o DROP final daquela cadeia. Chega aqui
+    # somente o que entrou pela 443 e ja foi aprovado como 443.
+    allowedTCPPorts = [ 443 8443 ];
     allowedUDPPorts = [ 41641 ]; # Tailscale direct connections
     trustedInterfaces = [ "tailscale0" "cni0" "flannel.1" ]; # Trust Tailscale and K3s interfaces
 
