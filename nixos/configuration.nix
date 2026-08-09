@@ -57,6 +57,11 @@
   systemd.network.networks."10-enp0s6" = {
     matchConfig.Name = "enp0s6";
     networkConfig.DHCP = "yes";
+    # A OCI entrega MTU 9000 via DHCP, mas o systemd-networkd ignora a opcao 26
+    # do DHCPv4 por padrao (UseMTU = false). O link ficava em 1500 enquanto a VM
+    # de teste, com cloud-init, subia em 9000 -- 6x mais pacotes por byte no
+    # oracle para o mesmo payload.
+    dhcpV4Config.UseMTU = true;
   };
 
   # Set time zone and locales
