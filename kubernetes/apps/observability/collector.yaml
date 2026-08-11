@@ -108,17 +108,55 @@ data:
             - 'IsMatch(body, ".*\"(GET|HEAD) /(healthz?|readyz?|livez?).*\" 200.*")'
             # Descarta logs completamente vazios
             - 'body == ""'
+      # Promove level/message/traceId do JSON de stdout das apps para
+      # atributos indexáveis. Logs de infra que não são JSON são ignorados
+      # (error_mode: ignore) e seguem com o body cru mesmo.
+      transform/parse_json:
+        error_mode: ignore
+        log_statements:
+          - context: log
+            statements:
+              - 'merge_maps(cache, ParseJSON(body), "upsert") where IsMatch(body, "^\\s*\\{")'
+              - 'set(attributes["level"], cache["level"]) where cache["level"] != nil'
+              - 'set(attributes["message"], cache["message"]) where cache["message"] != nil'
+              - 'set(attributes["traceId"], cache["traceId"]) where cache["traceId"] != nil'
       batch:
         timeout: 5s
         send_batch_size: 1024
 
+    connectors:
+      # Separa logs de infra (kube-system, cert-manager, traefik, flux-system,
+      # router) dos logs de aplicação, cada um em sua própria stream.
+      routing/logs:
+        default_pipelines: [logs/app]
+        error_mode: ignore
+        table:
+          - statement: >-
+              route() where resource.attributes["k8s.namespace.name"] == "kube-system"
+              or resource.attributes["k8s.namespace.name"] == "cert-manager"
+              or resource.attributes["k8s.namespace.name"] == "traefik"
+              or resource.attributes["k8s.namespace.name"] == "flux-system"
+              or resource.attributes["k8s.namespace.name"] == "router"
+            pipelines: [logs/infra]
+
     exporters:
-      otlphttp/openobserve_logs:
+      otlphttp/openobserve_app_logs:
         endpoint: http://openobserve.observability.svc.cluster.local:5080/api/default
         auth:
           authenticator: basicauth/openobserve
         headers:
-          stream-name: k8s_logs
+          stream-name: app_logs
+        sending_queue:
+          enabled: true
+          queue_size: 1024
+        retry_on_failure:
+          enabled: true
+      otlphttp/openobserve_infra_logs:
+        endpoint: http://openobserve.observability.svc.cluster.local:5080/api/default
+        auth:
+          authenticator: basicauth/openobserve
+        headers:
+          stream-name: infra_logs
         sending_queue:
           enabled: true
           queue_size: 1024
@@ -155,10 +193,18 @@ data:
         metrics:
           level: basic
       pipelines:
-        logs:
+        logs/in:
           receivers: [filelog]
-          processors: [memory_limiter, k8sattributes, filter/drop_noise, batch]
-          exporters: [otlphttp/openobserve_logs]
+          processors: [memory_limiter, k8sattributes, filter/drop_noise, transform/parse_json]
+          exporters: [routing/logs]
+        logs/app:
+          receivers: [routing/logs]
+          processors: [batch]
+          exporters: [otlphttp/openobserve_app_logs]
+        logs/infra:
+          receivers: [routing/logs]
+          processors: [batch]
+          exporters: [otlphttp/openobserve_infra_logs]
         metrics:
           receivers: [otlp, kubeletstats, hostmetrics]
           processors: [memory_limiter, k8sattributes, batch]
