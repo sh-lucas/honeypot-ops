@@ -111,6 +111,11 @@ data:
       # Promove level/message/traceId do JSON de stdout das apps para
       # atributos indexáveis. Logs de infra que não são JSON são ignorados
       # (error_mode: ignore) e seguem com o body cru mesmo.
+      #
+      # Duas formas de JSON são suportadas: um formato "flat" (message/traceId
+      # no topo) e o formato do tracing-subscriber do Rust (checkup/plinth),
+      # que aninha em fields.message e span.trace_id. Tenta o campo do topo
+      # primeiro; se não existir, cai pro aninhado.
       transform/parse_json:
         error_mode: ignore
         log_statements:
@@ -119,7 +124,9 @@ data:
               - 'merge_maps(cache, ParseJSON(body), "upsert") where IsMatch(body, "^\\s*\\{")'
               - 'set(attributes["level"], cache["level"]) where cache["level"] != nil'
               - 'set(attributes["message"], cache["message"]) where cache["message"] != nil'
+              - 'set(attributes["message"], cache["fields"]["message"]) where cache["message"] == nil and cache["fields"]["message"] != nil'
               - 'set(attributes["traceId"], cache["traceId"]) where cache["traceId"] != nil'
+              - 'set(attributes["traceId"], cache["span"]["trace_id"]) where cache["traceId"] == nil and cache["span"]["trace_id"] != nil'
       batch:
         timeout: 5s
         send_batch_size: 1024
