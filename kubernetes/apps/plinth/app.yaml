@@ -33,7 +33,7 @@ spec:
             - containerPort: 80
           readinessProbe:
             httpGet:
-              path: /
+              path: /docs
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 30
@@ -41,7 +41,7 @@ spec:
             failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /
+              path: /docs
               port: 80
             initialDelaySeconds: 10
             periodSeconds: 60
