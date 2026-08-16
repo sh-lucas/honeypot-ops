@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
         - name: plinth
-          image: registry.sh-lucas.dev/plinth:2026.08.16--31916958885--f2c2f11 # {"$imagepolicy": "flux-system:plinth"}
+          image: registry.sh-lucas.dev/plinth:2026.08.16--31925435044--9dc0080 # {"$imagepolicy": "flux-system:plinth"}
           imagePullPolicy: Always
           ports:
             - containerPort: 80
