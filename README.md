@@ -4,6 +4,39 @@ Este repositório contém a configuração declarativa de infraestrutura para um
 
 ---
 
+## Quickstart
+
+Na primeira máquina, restaure a identidade pessoal em
+`~/.config/sops/age/keys.txt` e entre uma vez no ambiente do projeto caso o
+`just` ainda não esteja instalado:
+
+```sh
+nix develop ./nixos
+```
+
+Depois disso, a rotina local fica concentrada no `justfile`:
+
+```sh
+just                         # lista os comandos
+just check                   # valida tudo sem deploy
+just se CAMINHO.sops.yaml    # edita um secret existente no micro
+just sc CAMINHO.sops.yaml    # cria e edita um secret novo no micro
+```
+
+Para um Secret Kubernetes, você pode informar nome e namespace diretamente:
+
+```sh
+just sc kubernetes/apps/checkup/another.sops.yaml checkup-extra checkup
+```
+
+Inclua um Secret Kubernetes novo no `kustomization.yaml` correspondente.
+Depois de `just check`, revise, faça commit e push: o Flux aplica as mudanças
+Kubernetes. Alterações do host exigem `just deploy`, executado pelo operador.
+O [bootstrap inicial do host e do Flux](nixos/secrets/README.md) é feito uma só
+vez e precisa acontecer antes do primeiro push com secrets SOPS.
+
+---
+
 ## 🛠️ O que usamos
 
 - **NixOS**: Configuração declarativa do sistema via Flakes e particionamento Btrfs via Disko.
@@ -70,13 +103,13 @@ Comportamento verificado: hello-world/checkup `200`; registry `401` (tailnet) / 
 
 - `nixos/`: Configurações de sistema operacional (`configuration.nix`, `flake.nix`, `disko.nix`, `hardware-configuration.nix`).
 - `kubernetes/`: Manifestos do Kubernetes divididos em `apps/` e `flux-system/` para sincronização via FluxCD.
-- `Makefile`: Atalhos para automação dos comandos de deploy do NixOS.
+- `justfile`: Interface para secrets, kubeconfig e deploy do NixOS.
 
 ---
 
 ## 🚀 Fluxo de Deployment
 
-As alterações do **NixOS** (sistema operacional e serviços do host) são copiadas localmente e aplicadas na VPS usando o comando `make deploy`. Já as alterações do **Kubernetes** (deployments, ingresses e secrets dentro da pasta `kubernetes/apps`) são aplicadas de forma totalmente automatizada pelo **FluxCD**: basta commitar e dar push dos manifestos para o GitHub e o cluster reconciliará o estado desejado automaticamente em poucos minutos.
+As alterações do **NixOS** (sistema operacional e serviços do host) são copiadas localmente e aplicadas na VPS usando o comando `just deploy`. Já as alterações do **Kubernetes** (deployments, ingresses e secrets dentro da pasta `kubernetes/apps`) são aplicadas de forma totalmente automatizada pelo **FluxCD**: basta commitar e dar push dos manifestos para o GitHub e o cluster reconciliará o estado desejado automaticamente em poucos minutos. Veja o Quickstart acima para os comandos locais.
 
 ---
 
@@ -90,7 +123,7 @@ Para rodar esta mesma configuração em qualquer outro provedor ou máquina virt
 
 - IPs commitados atualmente e anteriormente são da rede privada (tailscale), não IPs públicos.
 - Chaves privadas devem permanecer fora do Git. A inspeção dos caminhos no histórico alcançável não é uma garantia de ausência de segredos em todo o histórico.
-- O makefile e a estrutura do projeto foi feita para mim especificamente, mas pode ser adaptado para ser agnostico de provedor ou usuário.
+- O justfile e a estrutura do projeto foram feitos para este ambiente, mas podem ser adaptados para outro provedor ou usuário.
 
 
 ## Chaves e Secrets
@@ -108,3 +141,16 @@ permitindo recuperação por qualquer uma das duas chaves. O backup do kubeconfi
 em `secrets/kubeconfig.sops.yaml` é exclusivo da chave pessoal. O Secret
 `sops-age` e a configuração de descriptografia da Kustomization principal precisam
 estar preparados antes de publicar os manifests, conforme o guia de bootstrap.
+
+Arquivos locais legados:
+
+- `.source.sh` não é consumido pelo `justfile`; ele só exporta o kubeconfig e
+  credenciais GitHub para sessões manuais. Continua ignorado, com modo `0600`,
+  até o token ser migrado ou descartado conscientemente.
+- `registries.yaml` era a fonte plaintext da configuração agora versionada como
+  `nixos/secrets/registries.sops.yaml`; não participa mais do deploy.
+- o acesso SSH ao host usa `~/.ssh/oracle_ed25519`. Os antigos arquivos
+  `nixos/ssh-key-2026-07-01.key{,.pub}` eram cópias idênticas dessa chave RSA;
+  apesar do nome local, ela não é a Ed25519 usada pelo Git.
+- a chave Ed25519 usada pelo Git continua em `~/.ssh/id_ed25519` e não é
+  armazenada neste repositório, nem mesmo em formato SOPS.

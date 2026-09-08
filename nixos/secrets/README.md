@@ -60,7 +60,7 @@ antes de continuar. Não publique os manifests antes de preparar o Flux.
 3. Revise e publique os arquivos criptografados e configurações. Confira
    `kubectl -n flux-system get kustomizations`: `flux-system`, `infra` e `apps`
    devem ficar Ready. Aplique a configuração NixOS pelo fluxo habitual somente
-   depois da instalação da chave. O Makefile copia o arquivo criptografado.
+   depois da instalação da chave. `just deploy` copia o arquivo criptografado.
 
 4. No VPS, confira `systemctl status sops-install-secrets k3s` e, com acesso
    administrativo, a existência e permissões do destino de
@@ -74,10 +74,34 @@ cloudflared aposentado permanece ignorado e fora desta migração.
 
 ## Uso no computador e recuperação
 
-`age` e `sops` estão instalados no perfil Nix do usuário. Para usar as versões
-fixadas pelo projeto, execute `nix develop ./nixos`. Edite os arquivos da raiz
-do repositório com `sops edit caminho/secret.sops.yaml`; `.sops.yaml` seleciona
-os recipients. Os arquivos plaintext antigos continuam ignorados.
+O ambiente Nix do projeto fornece `age`, `just`, `micro` e `sops`. A interface
+normal não exige entrar no shell nem chamar SOPS diretamente:
+
+```sh
+just secret-edit kubernetes/apps/checkup/secret.sops.yaml
+just secret-create kubernetes/apps/checkup/another.sops.yaml checkup-extra checkup
+just check
+```
+
+`just check` valida o justfile, todos os arquivos SOPS, os manifests Kubernetes
+e o flake NixOS sem fazer deploy. Para checar apenas a criptografia, use
+`just secret-check`. Os aliases curtos são `just se`, `just sc` e
+`just secrets-check`. Os dois
+primeiros comandos abrem o conteúdo descriptografado no `micro`; ao sair, SOPS
+recriptografa e valida o arquivo. Na criação Kubernetes, `name` e `namespace`
+são argumentos opcionais; sem eles, vêm do nome do arquivo e do diretório pai.
+O comando abre um esqueleto com `stringData` e só grava o arquivo final quando
+a edição termina com YAML válido e todos os placeholders `replace-me` foram
+substituídos. Inclua o novo arquivo no `kustomization.yaml` correspondente para
+que o Flux o aplique.
+
+O caminho é recebido como argumento direto,
+precisa terminar em `.sops.yaml`, ficar dentro deste repositório e corresponder
+a uma regra de `.sops.yaml`. Para escolher outro editor apenas nessa execução,
+use, por exemplo, `SOPS_EDITOR=vim just secret-edit caminho.sops.yaml`.
+
+Os arquivos plaintext antigos continuam ignorados. Não use o editor comum para
+abrir o ciphertext: ele contém metadados SOPS e valores criptografados.
 
 O backup `secrets/kubeconfig.sops.yaml` tem apenas o recipient pessoal. Para
 restaurá-lo sem abrir permissões de leitura:
