@@ -274,6 +274,26 @@ ${lib.concatMapStrings (cidr: ''
       "--flannel-backend=host-gw"
     ];
   };
+
+  # The registry auth is encrypted in nixos/secrets/registries.sops.yaml and materialized
+  # only at runtime. The age private key is provisioned separately on the host
+  # at /var/lib/sops-nix/key.txt; it is never part of this repository.
+  sops.age.keyFile = "/var/lib/sops-nix/key.txt";
+  sops.age.sshKeyPaths = [];
+  sops.gnupg.sshKeyPaths = [];
+  sops.useSystemdActivation = true;
+  sops.secrets."k3s-registries" = {
+    sopsFile = ./secrets/registries.sops.yaml;
+    # Empty key means the whole YAML document is installed as the secret.
+    key = "";
+    owner = "root";
+    group = "root";
+    mode = "0400";
+    restartUnits = [ "k3s.service" ];
+  };
+  environment.etc."rancher/k3s/registries.yaml".source =
+    config.sops.secrets."k3s-registries".path;
+
   # Grupo de acesso ao kubeconfig
   users.groups.k3sconfig = {};
 
@@ -303,6 +323,8 @@ ${lib.concatMapStrings (cidr: ''
   # Garante de forma declarativa que o certificado do K3s seja regenerado
   # caso o hostname mude.
   systemd.services.k3s = {
+    after = [ "sops-install-secrets.service" ];
+    requires = [ "sops-install-secrets.service" ];
     preStart = ''
       CERT_FILE="/var/lib/rancher/k3s/server/tls/serving-kube-apiserver.crt"
       if [ -f "$CERT_FILE" ]; then
@@ -322,8 +344,7 @@ ${lib.concatMapStrings (cidr: ''
     dockerCompat = true;
     dockerSocket.enable = true; # Emula o socket do Docker em /run/docker.sock
   };
-  # K3s registry auth: managed manually on the server at /etc/rancher/k3s/registries.yaml
-  # Local backup copy: ./registries.yaml (gitignored)
+  # K3s registry auth is provisioned by sops-nix above.
 
   # Programs / Shell integrations
   programs.bash.interactiveShellInit = ''

@@ -89,10 +89,22 @@ Para rodar esta mesma configuração em qualquer outro provedor ou máquina virt
 ## Observações sobre o Repositório Git
 
 - IPs commitados atualmente e anteriormente são da rede privada (tailscale), não IPs públicos.
-- Chaves SSH privadas não foram commitadas nesse repositório. Apenas chaves públicas.
+- Chaves privadas devem permanecer fora do Git. A inspeção dos caminhos no histórico alcançável não é uma garantia de ausência de segredos em todo o histórico.
 - O makefile e a estrutura do projeto foi feita para mim especificamente, mas pode ser adaptado para ser agnostico de provedor ou usuário.
 
 
 ## Chaves e Secrets
 
-Como você pode perceber, as chaves e secrets estão fora do git, e precisam ser deployados manualmente toda vez que a VPS reiniciar. O ideal é migrar futuramente para sops e criptografar tudo antes de fazer upload para um repositório git privado.
+Os secrets Kubernetes e a autenticação do registry agora podem ser mantidos
+como arquivos SOPS criptografados. O Git contém apenas ciphertext; as chaves
+privadas ficam fora da árvore e fora do Nix store. O bootstrap está documentado
+em [nixos/secrets/README.md](nixos/secrets/README.md).
+
+O host usa `~/.config/sops/age/oracle-host-key.txt` como identidade age e ela
+deve ser instalada manualmente em `/var/lib/sops-nix/key.txt` com permissões
+restritas antes do primeiro rebuild. A identidade pessoal em
+`~/.config/sops/age/keys.txt` também é recipient dos secrets compartilhados,
+permitindo recuperação por qualquer uma das duas chaves. O backup do kubeconfig
+em `secrets/kubeconfig.sops.yaml` é exclusivo da chave pessoal. O Secret
+`sops-age` e a configuração de descriptografia da Kustomization principal precisam
+estar preparados antes de publicar os manifests, conforme o guia de bootstrap.

@@ -7,6 +7,10 @@ spec:
   interval: 10m0s
   path: ./kubernetes/infra
   prune: true
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
   sourceRef:
     kind: GitRepository
     name: flux-system
@@ -22,6 +26,10 @@ spec:
   prune: true
   dependsOn:
     - name: infra
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
   sourceRef:
     kind: GitRepository
     name: flux-system

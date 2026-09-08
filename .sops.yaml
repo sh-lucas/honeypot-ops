@@ -1,0 +1,13 @@
+creation_rules:
+  - path_regex: kubernetes/.*\.sops\.yaml$
+    encrypted_regex: '^(data|stringData)$'
+    age:
+      - age1mrzxnhevexdaywfjepmxhq5vu84zshcf34z9he056zqwcxvv8vus8970cc
+      - age1fqwlewvwa72jne30juy5u8nxkyy0x4dd06f0x0r984lmvexe954s2k5mx5
+  - path_regex: secrets/kubeconfig\.sops\.yaml$
+    age:
+      - age1mrzxnhevexdaywfjepmxhq5vu84zshcf34z9he056zqwcxvv8vus8970cc
+  - path_regex: nixos/secrets/.*\.sops\.yaml$
+    age:
+      - age1mrzxnhevexdaywfjepmxhq5vu84zshcf34z9he056zqwcxvv8vus8970cc
+      - age1fqwlewvwa72jne30juy5u8nxkyy0x4dd06f0x0r984lmvexe954s2k5mx5

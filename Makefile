@@ -3,8 +3,9 @@
 deploy: copy switch
 
 copy:
-	ssh lucas@oracle "mkdir -p /tmp/nixos-config"
+	ssh lucas@oracle "mkdir -p /tmp/nixos-config/secrets"
 	scp nixos/flake.nix nixos/configuration.nix nixos/hardware-configuration.nix nixos/disko.nix nixos/flake.lock lucas@oracle:/tmp/nixos-config/
+	scp nixos/secrets/registries.sops.yaml lucas@oracle:/tmp/nixos-config/secrets/
 
 switch:
 	ssh -t lucas@oracle "sudo cp -r /tmp/nixos-config/* /etc/nixos/ && sudo nixos-rebuild switch --flake /etc/nixos#oracle && rm -rf /tmp/nixos-config"

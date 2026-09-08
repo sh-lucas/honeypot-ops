@@ -5,3 +5,6 @@ kubeconfig.yaml
 .source.sh
 **/secret.yaml
 registries.yaml
+# Plaintext secret sources remain ignored; encrypted SOPS manifests are tracked.
+!**/*.sops.yaml
+nixos/secrets/keys/
