@@ -24,13 +24,13 @@
     devShells.x86_64-linux.default = let
       pkgs = import nixpkgs { system = "x86_64-linux"; };
     in pkgs.mkShell {
-      packages = [ pkgs.age pkgs.just pkgs.kubectl pkgs.micro pkgs.sops ];
+      packages = [ pkgs.age pkgs.gitleaks pkgs.jq pkgs.just pkgs.kubectl pkgs.micro pkgs.sops ];
     };
 
     devShells.aarch64-linux.default = let
       pkgs = import nixpkgs { system = "aarch64-linux"; };
     in pkgs.mkShell {
-      packages = [ pkgs.age pkgs.just pkgs.kubectl pkgs.micro pkgs.sops ];
+      packages = [ pkgs.age pkgs.gitleaks pkgs.jq pkgs.just pkgs.kubectl pkgs.micro pkgs.sops ];
     };
   };
 }

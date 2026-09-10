@@ -21,15 +21,26 @@ just                         # lista os comandos
 just check                   # valida tudo sem deploy
 just se CAMINHO.sops.yaml    # edita um secret existente no micro
 just sc CAMINHO.sops.yaml    # cria e edita um secret novo no micro
+just ds CAMINHO.sops.yaml NOME NAMESPACE # captura do cluster e criptografa
+just secret-scan             # procura credenciais no histórico e no stage
 ```
 
-Para um Secret Kubernetes, você pode informar nome e namespace diretamente:
+Para criar um Secret Kubernetes, você pode informar nome e namespace diretamente:
 
 ```sh
 just sc kubernetes/apps/checkup/another.sops.yaml checkup-extra checkup
 ```
 
 Inclua um Secret Kubernetes novo no `kustomization.yaml` correspondente.
+`just ds` preserva tipo e dados do Secret ativo, removendo apenas metadados do
+servidor antes de criptografar. O fluxo normal de publicação continua sendo Git
++ Flux. `just us` existe somente para break-glass e exige
+`ALLOW_DIRECT_SECRET_UPLOAD=1`.
+
+O `lefthook.yml` executa Gitleaks sobre o conteúdo staged antes de cada commit.
+Rode `lefthook install` uma vez após clonar. Linhas realmente criptografadas
+por SOPS são ignoradas, mas plaintext acidental dentro de `*.sops.yaml` continua
+sendo analisado.
 Depois de `just check`, revise, faça commit e push: o Flux aplica as mudanças
 Kubernetes. Alterações do host exigem `just deploy`, executado pelo operador.
 O [bootstrap inicial do host e do Flux](nixos/secrets/README.md) é feito uma só
@@ -144,9 +155,8 @@ estar preparados antes de publicar os manifests, conforme o guia de bootstrap.
 
 Arquivos locais legados:
 
-- `.source.sh` não é consumido pelo `justfile`; ele só exporta o kubeconfig e
-  credenciais GitHub para sessões manuais. Continua ignorado, com modo `0600`,
-  até o token ser migrado ou descartado conscientemente.
+- `.source.sh` não é consumido pelo `justfile`. Se ainda existir numa cópia de
+  trabalho antiga, trate-o como material legado e mantenha-o fora do repositório.
 - `registries.yaml` era a fonte plaintext da configuração agora versionada como
   `nixos/secrets/registries.sops.yaml`; não participa mais do deploy.
 - o acesso SSH ao host usa `~/.ssh/oracle_ed25519`. Os antigos arquivos

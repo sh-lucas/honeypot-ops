@@ -80,6 +80,7 @@ normal não exige entrar no shell nem chamar SOPS diretamente:
 ```sh
 just secret-edit kubernetes/apps/checkup/secret.sops.yaml
 just secret-create kubernetes/apps/checkup/another.sops.yaml checkup-extra checkup
+just secret-download kubernetes/apps/checkup/secret.sops.yaml checkup-secrets checkup
 just check
 ```
 
@@ -100,8 +101,9 @@ precisa terminar em `.sops.yaml`, ficar dentro deste repositório e corresponder
 a uma regra de `.sops.yaml`. Para escolher outro editor apenas nessa execução,
 use, por exemplo, `SOPS_EDITOR=vim just secret-edit caminho.sops.yaml`.
 
-Os arquivos plaintext antigos continuam ignorados. Não use o editor comum para
-abrir o ciphertext: ele contém metadados SOPS e valores criptografados.
+Arquivos plaintext legados devem ficar fora da árvore de trabalho. Não use o
+editor comum para abrir o ciphertext: ele contém metadados SOPS e valores
+criptografados.
 
 O backup `secrets/kubeconfig.sops.yaml` tem apenas o recipient pessoal. Para
 restaurá-lo sem abrir permissões de leitura:

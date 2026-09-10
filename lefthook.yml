@@ -1,0 +1,5 @@
+pre-commit:
+  commands:
+    gitleaks:
+      run: nix develop ./nixos --command gitleaks git --pre-commit --redact --staged --verbose
+      fail_text: "Possível segredo detectado; mova-o para SOPS antes do commit."

@@ -152,6 +152,88 @@ secret-create path name="" namespace="": (_check-secret-path path)
 
 alias sc := secret-create
 
+# Snapshot a Kubernetes Secret into SOPS; plaintext only crosses the in-memory pipe.
+[group('secrets')]
+secret-download path name namespace: (_check-secret-path path)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    umask 077
+    repository="$(pwd -P)"
+    target="$(realpath -m -- "$1")"
+    target="${target#"$repository"/}"
+    name="$2"
+    namespace="$3"
+    case "$target" in
+      kubernetes/*.sops.yaml) ;;
+      *) echo "erro: download só aceita Secrets Kubernetes" >&2; exit 2 ;;
+    esac
+    [[ "$name" =~ ^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$ ]] || { echo "erro: nome Kubernetes inválido: $name" >&2; exit 2; }
+    [[ "$namespace" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] || { echo "erro: namespace Kubernetes inválido: $namespace" >&2; exit 2; }
+    directory="$(dirname -- "$target")"
+    test -d "$directory" || { echo "erro: diretório não encontrado: $directory" >&2; exit 2; }
+    nix develop ./nixos --command bash -c '
+      set -euo pipefail
+      umask 077
+      target="$1"
+      name="$2"
+      namespace="$3"
+      directory="$(dirname -- "$target")"
+      temporary="$(mktemp --tmpdir="$directory" ".$(basename -- "$target").XXXXXX.sops.yaml")"
+      trap '\''rm -f -- "$temporary"'\'' EXIT
+      context="$(kubectl config current-context)"
+      server="$(kubectl config view --minify -o jsonpath='\''{.clusters[0].cluster.server}'\'')"
+      echo "Cluster: $context ($server); Secret: $namespace/$name"
+      kubectl -n "$namespace" get secret "$name" -o json |
+        jq -e '\''
+          select(.data | type == "object") |
+          {
+            apiVersion: "v1",
+            kind: "Secret",
+            metadata: {name: .metadata.name, namespace: .metadata.namespace},
+            type: .type,
+            data: .data
+          }
+        '\'' |
+        sops encrypt --filename-override "$target" --input-type json --output-type yaml /dev/stdin > "$temporary"
+      sops decrypt "$temporary" >/dev/null
+      mv -- "$temporary" "$target"
+      trap - EXIT
+      echo "Secret salvo como ciphertext: $target"
+    ' just-secret-download "$target" "$name" "$namespace"
+
+alias ds := secret-download
+
+# Break-glass direct apply. Normal deployment remains commit + push + Flux.
+[group('secrets')]
+secret-upload path: (_check-secret-path path)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    repository="$(pwd -P)"
+    target="$(realpath -m -- "$1")"
+    target="${target#"$repository"/}"
+    case "$target" in
+      kubernetes/*.sops.yaml) ;;
+      *) echo "erro: upload só aceita Secrets Kubernetes" >&2; exit 2 ;;
+    esac
+    test -f "$target" || { echo "erro: secret não encontrado: $target" >&2; exit 2; }
+    test "${ALLOW_DIRECT_SECRET_UPLOAD:-}" = 1 || {
+      echo "erro: upload direto contorna o Flux; use commit + push normalmente" >&2
+      echo "para break-glass: ALLOW_DIRECT_SECRET_UPLOAD=1 just us $target" >&2
+      exit 2
+    }
+    nix develop ./nixos --command bash -c '
+      set -euo pipefail
+      target="$1"
+      context="$(kubectl config current-context)"
+      server="$(kubectl config view --minify -o jsonpath='\''{.clusters[0].cluster.server}'\'')"
+      echo "Cluster: $context ($server); aplicando $target"
+      sops decrypt "$target" | kubectl apply --server-side --dry-run=server --field-manager=just-secret-upload -f - >/dev/null
+      sops decrypt "$target" | kubectl apply --server-side --field-manager=just-secret-upload -f -
+      echo "AVISO: o Flux pode restaurar o estado versionado no próximo reconcile."
+    ' just-secret-upload "$target"
+
+alias us := secret-upload
+
 # Check every tracked or untracked SOPS file without printing plaintext.
 [group('secrets')]
 secret-check:
@@ -169,9 +251,14 @@ secret-check:
 
 alias secrets-check := secret-check
 
+# Scan committed history and staged changes without printing detected values.
+[group('secrets')]
+secret-scan:
+    nix develop ./nixos --command bash -c 'gitleaks git --redact --verbose . && gitleaks git --pre-commit --redact --staged --verbose'
+
 # Run all local checks without deploying anything.
 [group('validation')]
-check: _justfile-check secret-check _manifests-check _nix-check
+check: _justfile-check secret-check secret-scan _manifests-check _nix-check
 
 [private]
 _justfile-check:

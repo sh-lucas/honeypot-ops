@@ -1,0 +1,26 @@
+title = "oracle-cloud secret detection"
+
+[extend]
+useDefault = true
+
+# SOPS ciphertext is expected to have high entropy. Ignore only encrypted
+# values, not the whole file, so accidental plaintext in a *.sops.yaml is
+# still scanned.
+[[allowlists]]
+description = "SOPS AES-GCM ciphertext"
+regexTarget = "line"
+regexes = ['''ENC\[AES256_GCM,''']
+
+# Complement the built-in provider-specific rules with assignments commonly
+# found in YAML, shell files and application configuration.
+[[rules]]
+id = "generic-secret-assignment"
+description = "Password or secret assigned directly in configuration"
+regex = '''(?i)(?:password|passwd|pwd|token|api[_-]?key|secret(?:[_-]?key)?|client[_-]?secret|private[_-]?key)[ \t]*["']?[ \t]*[:=][ \t]*["']?([^\s"'${}<>()\[\],;]{6,})'''
+secretGroup = 1
+keywords = ["password", "passwd", "pwd", "token", "api_key", "api-key", "secret", "client_secret", "private_key"]
+
+[[rules.allowlists]]
+description = "Explicit documentation placeholders"
+regexTarget = "secret"
+regexes = ['''(?i)^(?:replace-me|change-?me|example|dummy|redacted|seu[_-]?(?:novo[_-]?)?token[_-]?aqui|uma-senha-longa-e-unica)$''']
