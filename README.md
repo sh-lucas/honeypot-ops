@@ -96,7 +96,7 @@ Duas notas de método, para não repetir erros:
 O `cloudflared` está fora de produção (`replicas: 0`, rollback). O custo por request caiu de ~63% para **~11,8% de 1 core por 1000 rps** — o ganho veio de remover camadas do caminho do pacote (o túnel e o netns do pod do proxy), não de tuning.
 
 ```
-internet → Cloudflare (wildcard A *.sh-lucas.dev → 147.15.105.66, proxied)
+internet → Cloudflare (wildcard A *.sh-lucas.dev → <IP do servidor>, proxied)
          → enp0s6:443 (só IPs da Cloudflare — public-block)
          → REDIRECT → router nginx (hostNetwork, uid 101) :8443
          → pod da aplicação

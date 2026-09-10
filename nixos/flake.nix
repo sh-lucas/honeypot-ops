@@ -25,12 +25,18 @@
       pkgs = import nixpkgs { system = "x86_64-linux"; };
     in pkgs.mkShell {
       packages = [ pkgs.age pkgs.gitleaks pkgs.jq pkgs.just pkgs.kubectl pkgs.micro pkgs.sops ];
+      shellHook = ''
+        export KUBECONFIG="''${KUBECONFIG:-$PWD/kubernetes/kubeconfig.yaml}"
+      '';
     };
 
     devShells.aarch64-linux.default = let
       pkgs = import nixpkgs { system = "aarch64-linux"; };
     in pkgs.mkShell {
       packages = [ pkgs.age pkgs.gitleaks pkgs.jq pkgs.just pkgs.kubectl pkgs.micro pkgs.sops ];
+      shellHook = ''
+        export KUBECONFIG="''${KUBECONFIG:-$PWD/kubernetes/kubeconfig.yaml}"
+      '';
     };
   };
 }

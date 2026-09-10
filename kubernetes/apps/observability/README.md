@@ -1,14 +1,23 @@
 # Observabilidade
 
 O OpenObserve e o OpenTelemetry Collector são gerenciados pelo Flux neste diretório.
+As credenciais ficam em `secret.sops.yaml`: o repositório contém somente o
+ciphertext e o Flux o descriptografa durante a reconciliação usando o Secret
+`flux-system/sops-age`.
 
-Antes da primeira reconciliação, crie manualmente o secret no cluster:
+Para alterar as credenciais, edite o arquivo SOPS e publique normalmente pelo
+Git:
 
-```bash
-kubectl -n observability create secret generic openobserve-credentials \
-  --from-literal=username='seu-email' \
-  --from-literal=password='uma-senha-longa-e-unica'
+```sh
+just se kubernetes/apps/observability/secret.sops.yaml
+just check
 ```
+
+Não crie `openobserve-credentials` manualmente: o estado versionado é a fonte
+da verdade e o Flux pode restaurá-lo na reconciliação seguinte. Antes da
+primeira publicação com SOPS, conclua o bootstrap de `sops-age` e da
+descriptografia das Kustomizations conforme
+[`nixos/secrets/README.md`](../../../nixos/secrets/README.md).
 
 O Collector recebe OTLP/HTTP em `http://otel-collector.observability.svc.cluster.local:4318`.
 As aplicações devem definir `OTEL_EXPORTER_OTLP_ENDPOINT` para esse endereço. Logs não usam OTLP: a aplicação escreve JSON em `stdout` e o Collector os acompanha continuamente em `/var/log/pods`.
@@ -17,7 +26,11 @@ Os logs são separados em duas streams pelo namespace de origem (`k8s.namespace.
 
 O Collector exclui os próprios pods do namespace `observability`; isso evita um ciclo entre os access logs do OpenObserve e o coletor. Logs de aplicações e dos demais namespaces continuam sendo coletados.
 
-A UI fica em `https://observe.sh-lucas.dev`, no entrypoint `websecure`. O CoreDNS resolve esse hostname apenas para o IP da Tailscale do servidor; não existe registro público A/AAAA nem rota pelo tunnel Cloudflare. O certificado usa o `ClusterIssuer` DNS-01 já existente, sem expor a UI.
+A UI fica em `https://observe.sh-lucas.dev` e é servida pelo router nginx em
+`:8443`, restrita à origem privada. O CoreDNS direciona esse hostname ao
+endereço Tailscale do servidor; requisições vindas da internet são negadas. O
+Traefik e o `cloudflared` permanecem fora desse caminho. O certificado usa o
+`ClusterIssuer` DNS-01 já existente, sem tornar a UI pública.
 
 As imagens são deliberadamente fixadas. Atualize ambas em um commit separado depois de conferir as notas de versão.
 
