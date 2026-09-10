@@ -102,7 +102,7 @@ spec:
         - protocol: TCP
           port: 4318
     # Internet liberada, faixas privadas negadas: bloqueia o apiserver
-    # (10.43.0.1), o no (10.0.0.91), a malha Tailscale (100.64.0.0/10) e
+    # (10.43.0.1), o no (IP privado da VCN), a malha Tailscale (100.64.0.0/10) e
     # todo pod ou Service do cluster que nao esteja liberado acima.
     - to:
         - ipBlock:

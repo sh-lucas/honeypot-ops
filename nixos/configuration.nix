@@ -137,7 +137,7 @@ in
     #
     # Isto NAO expoe a 8443 na internet: a cadeia public-block roda antes de tudo,
     # em `mangle PREROUTING`, e la o pacote ainda tem o dport original. Quem bater
-    # direto em 147.15.105.66:8443 casa o DROP final daquela cadeia. Chega aqui
+    # direto em <ip-publico>:8443 casa o DROP final daquela cadeia. Chega aqui
     # somente o que entrou pela 443 e ja foi aprovado como 443.
     allowedTCPPorts = [ 443 8443 ];
     allowedUDPPorts = [ 41641 ]; # Tailscale direct connections
@@ -161,11 +161,11 @@ in
       # estar aqui alem do allowedTCPPorts: esta cadeia roda antes, no mangle
       # PREROUTING, e o DROP final descartaria o pacote antes do REDIRECT.
       #
-      # Efeito: quem descobrir 147.15.105.66 e bater direto nao passa mais --
+      # Efeito: quem descobrir <ip-publico> e bater direto nao passa mais --
       # nao ha como pular o WAF, o rate limit nem o TLS do edge. O tailnet nao
       # e afetado: entra por tailscale0 e e avaliado na cadeia tailscale-block.
       #
-      # CUSTO: teste com `curl --resolve ... 147.15.105.66` para de funcionar de
+      # CUSTO: teste com `curl --resolve ... <ip-publico>` para de funcionar de
       # fora do tailnet. Para depurar o origin, use a Tailscale.
 ${lib.concatMapStrings (cidr: ''
       iptables -t mangle -A public-block -p tcp --dport 443 -s ${cidr} -j ACCEPT
