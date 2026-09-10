@@ -1,7 +1,7 @@
 # What you can do
 
 Instruct me, verify nixos configurations, and ask for permission for "ssh sudo" and registry commands. You should not try to run any `just deploy` or sudo command since it will block your execution.
-You can ask for further permissions and is intended to help the repository evolve as a self-contained, reproducible deployment. 
+You can ask for further permissions and is intended to help the repository evolve as a self-contained, reproducible deployment.
 
 
 ## Setups and Objectives
@@ -17,5 +17,5 @@ Images are already pushed to the private repository and you can pull them with p
 - Keep it clean, for the sake of god: infraestructure is hard, a human HAS to review it, so please, avoid making it harder.
 - Do not commit IPs, do not commit passwords, do not let the user commit credentials.
 - Follow the fucking script: you shouldn't need 20 files to run a simple deployment, my god, but even then, it's better to follow the current project structure then reinventing the wheel.
-- Discuss and rethink, always. 
+- Discuss and rethink, always.
 - Keep the repository useful and direct to use: the simpler the usage cycle, the harder it is to break something. Thats the reason a `just deploy` exists.

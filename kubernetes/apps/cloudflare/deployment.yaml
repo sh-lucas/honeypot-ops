@@ -6,7 +6,7 @@ metadata:
   labels:
     app: cloudflared
 spec:
-  # Fora do caminho de dados (o wildcard A *.sh-lucas.dev -> 147.15.105.66
+  # Fora do caminho de dados (o wildcard A *.sh-lucas.dev -> IP do servidor
   # vai direto na 443). Rollback: subir o replicas e apontar o destino no painel.
   replicas: 0
   selector:
