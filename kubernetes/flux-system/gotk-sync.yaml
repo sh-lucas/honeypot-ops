@@ -11,7 +11,7 @@ spec:
     branch: master
   secretRef:
     name: flux-system
-  url: ssh://git@github.com/sh-lucas/catnip-infra
+  url: ssh://git@github.com/sh-lucas/honeypot-ops
 ---
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
