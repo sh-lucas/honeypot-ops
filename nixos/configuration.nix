@@ -206,9 +206,11 @@ ${lib.concatMapStrings (cidr: ''
       # caminho e o scan morre com connection refused -- so o host/kubelet, que
       # sai pelo tailscale0, continuava funcionando.
       iptables -t nat -D PREROUTING -i cni0 -p tcp --dport 443 -j REDIRECT --to-port 8443 2>/dev/null || true
-      iptables -t nat -A PREROUTING -i cni0 -p tcp --dport 443 -j REDIRECT --to-port 8443
       iptables -t nat -D PREROUTING -i flannel.1 -p tcp --dport 443 -j REDIRECT --to-port 8443 2>/dev/null || true
-      iptables -t nat -A PREROUTING -i flannel.1 -p tcp --dport 443 -j REDIRECT --to-port 8443
+      iptables -t nat -D PREROUTING -i cni0 -d 100.64.0.0/10 -p tcp --dport 443 -j REDIRECT --to-port 8443 2>/dev/null || true
+      iptables -t nat -A PREROUTING -i cni0 -d 100.64.0.0/10 -p tcp --dport 443 -j REDIRECT --to-port 8443
+      iptables -t nat -D PREROUTING -i flannel.1 -d 100.64.0.0/10 -p tcp --dport 443 -j REDIRECT --to-port 8443 2>/dev/null || true
+      iptables -t nat -A PREROUTING -i flannel.1 -d 100.64.0.0/10 -p tcp --dport 443 -j REDIRECT --to-port 8443
       # O kubelet/containerd conecta da propria rede do host (nao passa por
       # PREROUTING de interface nenhuma): a conexao para a propria IP tailscale
       # sai pelo OUTPUT como entrega local. Sem o REDIRECT aqui, o pull de
