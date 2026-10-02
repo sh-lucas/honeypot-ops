@@ -59,7 +59,8 @@ in
   #
   # Custo de seguranca assumido: heap nao inicializada volta a poder vazar
   # conteudo de alocacao anterior por bug de use-of-uninitialized. Aceitavel
-  # aqui porque a superficie exposta e so o tunel Cloudflare.
+  # aqui porque a superficie exposta e so a 443 do router nginx, restrita as
+  # faixas da Cloudflare (cadeia public-block abaixo).
   #
   # Medido nesta VPS, mediana de 3 repeticoes, antes (7.1.3) -> depois (6.18.38
   # + params). Arquivos em ~/bench-antes.txt e ~/bench-depois2.txt no no:
@@ -108,7 +109,7 @@ in
     ];
   };
 
-  # Enable passwordless sudo for 'wheel' group
+  # sudo exige senha para o grupo wheel
   security.sudo.wheelNeedsPassword = true;
 
   # Enable the OpenSSH daemon

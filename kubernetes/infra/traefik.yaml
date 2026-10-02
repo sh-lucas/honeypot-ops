@@ -9,8 +9,9 @@
 #
 # Sem sourceCriterion de proposito. A versao anterior (fb1d619) usava
 # `requestHost: true`, o que dava um orcamento de 1000 para cada hostname em vez
-# de um limite agregado. O default e por IP de origem, e como todo o trafego
-# externo chega do pod do cloudflared, o efeito pratico e um contador unico.
+# de um limite agregado. O default e por IP de origem. Historico: quando todo o
+# trafego externo chegava do pod do cloudflared (hoje aposentado), o efeito
+# pratico era um contador unico.
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
 metadata:
@@ -79,10 +80,11 @@ spec:
         # Libera a porta 443 do host, que passa a ser do router (apps/router).
         # O ServiceLB do k3s so permite um dono por porta.
         #
-        # CONSEQUENCIA: registry.sh-lucas.dev e observe.sh-lucas.dev deixam de
-        # responder pela Tailscale, e o containerd para de conseguir puxar
-        # imagens de registry.sh-lucas.dev -- o que trava a automacao de imagem
-        # do Flux. Feito a pedido, para expor o plinth direto e medir sem tunel.
+        # registry.sh-lucas.dev e observe.sh-lucas.dev passaram a ser servidos
+        # pelo router na 8443 (REDIRECT 443 em nixos/configuration.nix, inclusive
+        # para o containerd e o image-reflector do Flux). Os Ingress do Traefik
+        # continuam aplicados, mas sem entrypoint publicado: nao sao rollback
+        # funcional enquanto este expose estiver false.
         expose:
           default: false
         http:

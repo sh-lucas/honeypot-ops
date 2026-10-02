@@ -44,8 +44,8 @@ As imagens são deliberadamente fixadas. Atualize ambas em um commit separado de
 ### Alertas
 
 - [ ] **Configurar alertas no OpenObserve** para os casos que realmente importam:
-  - `CrashLoopBackOff` — pod reiniciando repetidamente (detectável via logs do kubelet ou métrica `kube_pod_container_status_waiting_reason`)
-  - **Downtime** — pod não-ready por mais de N minutos (métrica `kubelet_running_pods` ou ausência de heartbeat)
+  - `CrashLoopBackOff` — pod reiniciando repetidamente (detectável pela métrica `k8s.container.restarts` do kubeletstats; não há kube-state-metrics, e o filelog só lê `/var/log/pods`, não logs do kubelet)
+  - **Downtime** — pod não-ready por mais de N minutos (ausência de heartbeat/telemetria do app)
   - **Acúmulo de erros** — taxa de logs com `level=error` acima de threshold por janela de tempo
-  - **Disco cheio** — métrica `filesystem_usage` do hostmetrics acima de 80%
+  - **Disco cheio** — métrica `system.filesystem.utilization` do hostmetrics acima de 80%
   - Canal de destino a definir (e-mail, webhook, Telegram, etc.)

@@ -74,7 +74,8 @@ cloudflared aposentado permanece ignorado e fora desta migração.
 
 ## Uso no computador e recuperação
 
-O ambiente Nix do projeto fornece `age`, `just`, `micro` e `sops`. A interface
+O ambiente Nix do projeto fornece `age`, `gitleaks`, `jq`, `just`, `kubectl`,
+`micro` e `sops`. A interface
 normal não exige entrar no shell nem chamar SOPS diretamente:
 
 ```sh
@@ -86,8 +87,9 @@ just check
 
 `just check` valida o justfile, todos os arquivos SOPS, os manifests Kubernetes
 e o flake NixOS sem fazer deploy. Para checar apenas a criptografia, use
-`just secret-check`. Os aliases curtos são `just se`, `just sc` e
-`just secrets-check`. Os dois
+`just secret-check`. Os aliases curtos são `just se`, `just sc`, `just ds` e
+`just secrets-check`; `just us` (upload direto) é break-glass e exige
+`ALLOW_DIRECT_SECRET_UPLOAD=1`. Os dois
 primeiros comandos abrem o conteúdo descriptografado no `micro`; ao sair, SOPS
 recriptografa e valida o arquivo. Na criação Kubernetes, `name` e `namespace`
 são argumentos opcionais; sem eles, vêm do nome do arquivo e do diretório pai.
@@ -97,8 +99,9 @@ substituídos. Inclua o novo arquivo no `kustomization.yaml` correspondente para
 que o Flux o aplique.
 
 O caminho é recebido como argumento direto,
-precisa terminar em `.sops.yaml`, ficar dentro deste repositório e corresponder
-a uma regra de `.sops.yaml`. Para escolher outro editor apenas nessa execução,
+precisa terminar em `.sops.yaml`, ficar dentro deste repositório, cair num dos
+prefixos aprovados no `justfile` (`kubernetes/`, `nixos/secrets/` ou
+`secrets/kubeconfig.sops.yaml`) e corresponder a uma regra de `.sops.yaml`. Para escolher outro editor apenas nessa execução,
 use, por exemplo, `SOPS_EDITOR=vim just secret-edit caminho.sops.yaml`.
 
 Arquivos plaintext legados devem ficar fora da árvore de trabalho. Não use o
