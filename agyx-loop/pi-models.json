@@ -1,0 +1,55 @@
+{
+  "$schema": "https://pi.dev/schemas/models.schema.json",
+  "providers": {
+    "nvidia": {
+      "baseUrl": "https://integrate.api.nvidia.com/v1",
+      "api": "openai-completions",
+      "apiKey": "$NVIDIA_API_KEY",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "models": [
+        {
+          "id": "z-ai/glm-5.3",
+          "name": "GLM 5.3 (NIM)",
+          "reasoning": true,
+          "contextWindow": 204800,
+          "maxTokens": 16384
+        },
+        {
+          "id": "z-ai/glm-5.3-flash",
+          "name": "GLM 5.3 Flash (NIM)",
+          "reasoning": true,
+          "contextWindow": 204800,
+          "maxTokens": 16384
+        },
+        {
+          "id": "deepseek-ai/deepseek-v4.1-flash",
+          "name": "DeepSeek V4.1 Flash (NIM)",
+          "reasoning": true,
+          "contextWindow": 163840,
+          "maxTokens": 16384
+        }
+      ]
+    },
+    "deepseek": {
+      "baseUrl": "https://api.deepseek.com",
+      "api": "openai-completions",
+      "apiKey": "$DEEPSEEK_API_KEY",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": true
+      },
+      "models": [
+        {
+          "id": "deepseek-flash",
+          "name": "DeepSeek V4.1 Flash",
+          "reasoning": true,
+          "contextWindow": 1048576,
+          "maxTokens": 16384
+        }
+      ]
+    }
+  }
+}
