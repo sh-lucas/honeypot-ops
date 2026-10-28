@@ -71,14 +71,12 @@ spec:
             - name: DIFFICULTY
               value: normal
             # Offline: aceita conta Java pirata. Sem auth da Mojang, qualquer um
-            # pode entrar com o nick de outro -- inclusive o do op abaixo.
+            # pode entrar com o nick de outro -- inclusive o de um op.
             - name: ONLINE_MODE
               value: "FALSE"
             # Assinatura de chat exige conta autenticada; ligada, derruba os offline.
             - name: ENFORCE_SECURE_PROFILE
               value: "FALSE"
-            - name: OPS
-              value: CafeComunista
             # IP exposto direto na internet: so entra quem estiver na lista.
             # Adicionar: rcon-cli whitelist add <nick>  (Bedrock: fwhitelist add <gamertag>)
             - name: ENABLE_WHITELIST
