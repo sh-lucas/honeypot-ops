@@ -4,3 +4,11 @@ resources:
   - registry-credentials.sops.yaml
   - gotk-components.yaml
   - gotk-sync.yaml
+patches:
+  - target:
+      kind: Deployment
+      name: (kustomize-controller|helm-controller|notification-controller|image-reflector-controller|image-automation-controller)
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
