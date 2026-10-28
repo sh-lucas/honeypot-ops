@@ -170,7 +170,12 @@ in
       # fora do tailnet. Para depurar o origin, use a Tailscale.
 ${lib.concatMapStrings (cidr: ''
       iptables -t mangle -A public-block -p tcp --dport 443 -s ${cidr} -j ACCEPT
-'') cloudflareIPv4}      iptables -t mangle -A public-block -j DROP
+'') cloudflareIPv4}      # Minecraft (kubernetes/apps/minecraft): Java 25565/tcp e Bedrock 19132/udp,
+      # abertas a qualquer origem -- a Cloudflare nao faz proxy do jogo. Entram por
+      # hostPort (DNAT para o pod, cadeia FORWARD), por isso nao vao no allowedTCPPorts.
+      iptables -t mangle -A public-block -p tcp --dport 25565 -j ACCEPT
+      iptables -t mangle -A public-block -p udp --dport 19132 -j ACCEPT
+      iptables -t mangle -A public-block -j DROP
       
       iptables -t mangle -D PREROUTING -i enp0s6 -j public-block 2>/dev/null || true
       iptables -t mangle -A PREROUTING -i enp0s6 -j public-block

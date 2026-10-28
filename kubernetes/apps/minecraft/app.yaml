@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: minecraft
+---
+# Paper + Geyser/Floodgate: Java na 25565/tcp, Bedrock (celular) na 19132/udp.
+# SteelMC foi avaliado e descartado: pre-alpha, sem survival e sem plugins.
+#
+# Nao passa pela Cloudflare (o proxy nao carrega o protocolo do jogo):
+# minecraft.sh-lucas.dev e um registro DNS-only, e as duas portas sao abertas
+# na cadeia public-block do nixos/configuration.nix.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minecraft
+  namespace: minecraft
+  labels:
+    app: minecraft
+spec:
+  replicas: 1
+  # hostPort e o lock do mundo no volume nao admitem dois pods ao mesmo tempo.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: minecraft
+  template:
+    metadata:
+      labels:
+        app: minecraft
+    spec:
+      containers:
+        - name: minecraft
+          image: itzg/minecraft-server:2026.10.1-java25
+          ports:
+            - name: java
+              containerPort: 25565
+              hostPort: 25565
+              protocol: TCP
+            - name: bedrock
+              containerPort: 19132
+              hostPort: 19132
+              protocol: UDP
+          env:
+            - name: EULA
+              value: "TRUE"
+            - name: TYPE
+              value: PAPER
+            - name: VERSION
+              value: "26.3"
+            # Geyser sem versao fixa de proposito: o celular atualiza o Bedrock
+            # sozinho e so o Geyser novo entende o protocolo novo. Reiniciar o
+            # pod baixa a build mais recente.
+            - name: PLUGINS
+              value: |
+                https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot
+                https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot
+            - name: MEMORY
+              value: 3G
+            - name: USE_AIKAR_FLAGS
+              value: "true"
+            # CPU fraca (2 cores N1, dividida com o resto do cluster).
+            - name: VIEW_DISTANCE
+              value: "8"
+            - name: SIMULATION_DISTANCE
+              value: "6"
+            - name: MAX_PLAYERS
+              value: "10"
+            - name: MOTD
+              value: sh-lucas.dev
+            - name: DIFFICULTY
+              value: normal
+            # Offline: aceita conta Java pirata. Sem auth da Mojang, qualquer um
+            # pode entrar com o nick de outro -- inclusive o do op abaixo.
+            - name: ONLINE_MODE
+              value: "FALSE"
+            # Assinatura de chat exige conta autenticada; ligada, derruba os offline.
+            - name: ENFORCE_SECURE_PROFILE
+              value: "FALSE"
+            - name: OPS
+              value: CafeComunista
+            # IP exposto direto na internet: so entra quem estiver na lista.
+            # Adicionar: rcon-cli whitelist add <nick>  (Bedrock: fwhitelist add <gamertag>)
+            - name: ENABLE_WHITELIST
+              value: "true"
+            - name: ENFORCE_WHITELIST
+              value: "true"
+            - name: TZ
+              value: America/Sao_Paulo
+          resources:
+            requests:
+              cpu: 500m
+              memory: 3Gi
+            limits:
+              cpu: 1500m
+              memory: 4Gi
+          # O primeiro boot baixa o Paper e gera o mundo: minutos nesta CPU.
+          startupProbe:
+            exec:
+              command: ["mc-health"]
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: ["mc-health"]
+            periodSeconds: 30
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["mc-health"]
+            periodSeconds: 60
+            timeoutSeconds: 5
+            failureThreshold: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: minecraft-data

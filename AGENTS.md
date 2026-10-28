@@ -7,6 +7,7 @@ You can ask for further permissions and is intended to help the repository evolv
 ## Setups and Objectives
 
 The VPS is deployed at oracle cloud. Ingress: TCP 443 straight at the origin IP, served by the nginx router (`kubernetes/apps/router`, hostNetwork, REDIRECT to 8443); Cloudflare in front (wildcard A, proxied) terminates TLS. Only Cloudflare IPs reach the 443 (`cloudflareIPv4` list, mangle chain `public-block` in `nixos/configuration.nix`).
+Minecraft (`kubernetes/apps/minecraft`) is the exception: 25565/tcp and 19132/udp open to any source via hostPort, `minecraft.sh-lucas.dev` is DNS-only.
 cloudflared is retired (`replicas: 0`, rollback). `tailscale0` is the mesh; `registry`/`observe` are served by the router on 8443, private origin only.
 
 Images are already pushed to the private repository and you can pull them with podman when connected to the tailnet. Do not mess with my docker setup.

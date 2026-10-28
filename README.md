@@ -65,6 +65,8 @@ Pela interface pública (`enp0s6`), só pacotes originados de faixas oficiais da
 1. **Borda (Oracle Cloud)**: A Security List / NSG no nível da VCN descarta qualquer tráfego na porta 443 fora da lista de CIDRs da Cloudflare antes de atingir a VM (configurado no console da OCI, fora deste repositório).
 2. **Host (NixOS)**: A cadeia `public-block` em `mangle PREROUTING` no [nixos/configuration.nix](nixos/configuration.nix) valida os CIDRs da Cloudflare e dropa qualquer conexão direta no IP de origem do servidor.
 
+**Exceção: Minecraft** ([kubernetes/apps/minecraft](kubernetes/apps/minecraft)). A Cloudflare não faz proxy do jogo, então a `public-block` aceita `25565/tcp` (Java) e `19132/udp` (Bedrock) de qualquer origem, e o pod as recebe via `hostPort`. Passos manuais, fora do repositório: registro `A minecraft` **DNS-only** (nuvem cinza) na Cloudflare apontando para o IP de origem, e as duas portas liberadas na Security List da VCN. O servidor usa whitelist: `kubectl -n minecraft exec deploy/minecraft -- rcon-cli whitelist add <nick>` (Bedrock: `fwhitelist add <gamertag>`).
+
 **IPv4 apenas.** A `public-block` não tem equivalente em ip6tables, e o `allowedTCPPorts` abre 443/8443 também em IPv6. Hoje a `enp0s6` não tem IPv6 global; se um dia a VCN ganhar IPv6, a origem fica exposta sem o filtro da Cloudflare.
 
 ### Contenção de Saída (Egress) das Aplicações
