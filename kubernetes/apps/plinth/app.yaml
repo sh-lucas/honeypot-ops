@@ -54,6 +54,8 @@ spec:
               value: "sqlite:///data/central.db"
             - name: TENANT_ROOT
               value: "/data/tenants"
+            - name: PLINTH_TOKEN_MAX_TTL
+              value: "31536000"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://otel-collector.observability.svc.cluster.local:4318"
             - name: DEPLOYMENT_ENVIRONMENT
