@@ -92,12 +92,13 @@ spec:
             # Assinatura de chat exige conta autenticada; ligada, derruba os offline.
             - name: ENFORCE_SECURE_PROFILE
               value: "FALSE"
-            # IP exposto direto na internet: so entra quem estiver na lista.
-            # Adicionar: rcon-cli whitelist add <nick>  (Bedrock: fwhitelist add <gamertag>)
+            # Whitelist desligada por escolha: com ONLINE_MODE=FALSE qualquer um
+            # entra com qualquer nick. Religar: "true" nas duas e
+            # rcon-cli whitelist add <nick>  (Bedrock: fwhitelist add <gamertag>)
             - name: ENABLE_WHITELIST
-              value: "true"
+              value: "false"
             - name: ENFORCE_WHITELIST
-              value: "true"
+              value: "false"
             - name: TZ
               value: America/Sao_Paulo
           resources:
