@@ -17,6 +17,10 @@ spec:
           port: 25565
         - protocol: UDP
           port: 19132
+        - protocol: TCP
+          port: 19132
+        - protocol: UDP
+          port: 19133
 ---
 # Mesmo formato da plinth-egress: DNS e internet (auth da Mojang/Xbox, downloads
 # do Paper e do Geyser), faixas privadas negadas.

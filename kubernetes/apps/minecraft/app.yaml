@@ -3,7 +3,8 @@ kind: Namespace
 metadata:
   name: minecraft
 ---
-# Paper + Geyser/Floodgate: Java na 25565/tcp, Bedrock (celular) na 19132/udp.
+# Paper + Geyser/Floodgate: Java na 25565/tcp, Bedrock (celular) na 19132
+# (udp RakNet, tcp sinalizacao NetherNet) e 19133/udp (WebRTC NetherNet).
 # SteelMC foi avaliado e descartado: pre-alpha, sem survival e sem plugins.
 #
 # Nao passa pela Cloudflare (o proxy nao carrega o protocolo do jogo):
@@ -41,6 +42,16 @@ spec:
               containerPort: 19132
               hostPort: 19132
               protocol: UDP
+            # NetherNet (Bedrock novo): sinalizacao HTTP na mesma porta, em TCP,
+            # e o jogo via WebRTC numa UDP propria.
+            - name: signaling
+              containerPort: 19132
+              hostPort: 19132
+              protocol: TCP
+            - name: webrtc
+              containerPort: 19133
+              hostPort: 19133
+              protocol: UDP
           env:
             - name: EULA
               value: "TRUE"
@@ -55,6 +66,10 @@ spec:
               value: |
                 https://download.geysermc.org/v2/projects/geyser/versions/latest/builds/latest/downloads/spigot
                 https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot
+            # Geyser 2.12 removeu o modo so-RakNet; "both" aceita RakNet (19132/udp)
+            # e NetherNet (19133/udp). Viram -D na JVM e sobrepoem o config.yml.
+            - name: JVM_DD_OPTS
+              value: geyserTransport=both geyserWebrtcPort=19133
             - name: MEMORY
               value: 3G
             - name: USE_AIKAR_FLAGS
